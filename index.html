@@ -1,0 +1,2644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <!-- ===== 1. EN-TÊTE DU DOCUMENT : réglages invisibles pour le navigateur ===== -->
+  <meta charset="UTF-8">
+  <!-- Adapte la page à la largeur de l'iPhone ; viewport-fit=cover = utiliser tout l'écran (encoche comprise) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFF8F0">
+  <!-- Quand l'app est ajoutée à l'écran d'accueil de l'iPhone : plein écran, barre d'état claire -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Budget">
+  <!-- La "carte d'identité" de l'app (nom, icônes, couleurs) et l'icône pour l'écran d'accueil iPhone -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icones/icone-180.png">
+  <link rel="icon" href="icones/icone-192.png">
+  <!-- On précharge les polices pour qu'elles s'affichent tout de suite -->
+  <link rel="preload" href="polices/nunito.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="polices/fredoka.woff2" as="font" type="font/woff2" crossorigin>
+  <title>Budget</title>
+
+  <!-- ===== 2. CSS : l'apparence ===== -->
+  <style>
+    /* --- Les polices, rangées dans le dossier "polices" (elles marchent donc hors connexion).
+           Nunito : arrondie et très lisible, pour le texte.
+           Fredoka : ronde et joyeuse, pour les titres et les gros montants.
+           Ce sont des polices "variables" : un seul fichier contient toutes les graisses. --- */
+    @font-face {
+      font-family: "Nunito";
+      src: url("polices/nunito.woff2") format("woff2");
+      font-weight: 200 1000;
+      font-display: swap; /* en attendant la police, on affiche le texte avec celle du système */
+    }
+    @font-face {
+      font-family: "Fredoka";
+      src: url("polices/fredoka.woff2") format("woff2");
+      font-weight: 300 700;
+      font-display: swap;
+    }
+
+    /* Variables de couleur : on les change ici, et tout le site suit */
+    :root {
+      color-scheme: light;
+      --fond: #FFF8F0;          /* crème chaleureux */
+      --carte: #FFFFFF;
+      --creux: #F7F1EA;         /* blocs et champs posés dans une carte */
+      --bordure: #EDE4DA;
+      --grille: #F0E8DF;
+      --texte: #2D2640;         /* une encre prune, plus douce que le noir */
+      --doux: #776F8A;          /* texte secondaire (reste lisible sur blanc) */
+      --accent: #6D5BEA;        /* violet */
+      --accent-doux: #EEEBFF;
+      --rose: #FF8FB1;
+      --rouge: #D9415C;
+      --rouge-doux: #FFE4E8;
+      --orange: #A86400;
+      --vert: #13885A;
+      --vert-doux: #DDF5E9;
+      --ombre: 0 2px 10px rgba(45, 38, 64, 0.06);
+      --police-texte: "Nunito", -apple-system, system-ui, sans-serif;
+      --police-titre: "Fredoka", "Nunito", -apple-system, system-ui, sans-serif;
+      --hauteur-onglets: 64px;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; } /* "hidden" cache toujours, même si un style dit le contraire */
+    button, input, select { font-family: inherit; } /* les champs n'héritent pas de la police tout seuls */
+    /* Le contour qui montre où l'on est au clavier : gardé (accessibilité), mais aux couleurs de l'app */
+    :focus-visible { outline: 3px solid #CFC7FF; outline-offset: 2px; }
+
+    body {
+      margin: 0;
+      font-family: var(--police-texte);
+      font-size: 15px;
+      background: var(--fond);
+      color: var(--texte);
+      /* env(safe-area-inset-...) = la place prise par l'encoche et la barre du bas de l'iPhone.
+         En bas, on laisse de la place pour la barre d'onglets + le bouton rond. */
+      padding: env(safe-area-inset-top) 16px
+               calc(env(safe-area-inset-bottom) + var(--hauteur-onglets) + 100px);
+    }
+
+    /* --- Navigation entre les périodes de paie --- */
+    .navigation-periode {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .fleche {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: none;
+      background: var(--carte);
+      box-shadow: var(--ombre);
+      color: var(--texte);
+      font-size: 22px;
+      cursor: pointer;
+    }
+    .fleche:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
+    #nom-periode { color: var(--doux); font-size: 14px; font-weight: 600; text-align: center; }
+
+    /* --- Le gros chiffre "Il te reste", dans une carte au dégradé pastel --- */
+    .entete {
+      text-align: center;
+      margin-top: 14px;
+      padding: 22px 16px 20px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #ECE7FF 0%, #FFE5F0 100%);
+    }
+    .entete.negatif { background: linear-gradient(135deg, #FFE4E8 0%, #FFEEDD 100%); }
+    .etiquette {
+      color: var(--doux);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .entete .etiquette { color: var(--accent); }
+    #reste {
+      font-family: var(--police-titre);
+      font-size: 58px;
+      font-weight: 600;
+      margin: 2px 0 12px;
+      font-variant-numeric: tabular-nums; /* chiffres de même largeur */
+    }
+    #reste.negatif { color: var(--rouge); }
+    .detail {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px 16px;
+      color: var(--doux);
+      font-size: 14px;
+    }
+    .detail strong { color: var(--texte); font-weight: 700; }
+    #info-salaire { color: var(--doux); font-size: 14px; margin-top: 10px; }
+
+    .lien-recap {
+      margin-top: 14px;
+      background: var(--accent-doux);
+      color: var(--accent);
+      border: none;
+      border-radius: 20px;
+      padding: 9px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .entete .lien-recap { background: rgba(255, 255, 255, 0.75); }
+
+    /* --- Fenêtre de récap d'une période terminée --- */
+    #fenetre-recap .etiquette { text-align: center; }
+    #fenetre-recap h2 { text-align: center; margin: 4px 0 12px; }
+    .recap-solde {
+      font-family: var(--police-titre);
+      font-size: 46px;
+      font-weight: 600;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .recap-solde.positif { color: var(--vert); }
+    .recap-solde.negatif { color: var(--rouge); }
+    #recap-phrase { text-align: center; margin: 6px 0 0; }
+    .recap-colonnes { display: flex; gap: 10px; margin: 18px 0; }
+    .recap-bloc { flex: 1; min-width: 0; background: var(--creux); border-radius: 16px; padding: 12px; }
+    .recap-total {
+      font-family: var(--police-titre);
+      font-size: 22px;
+      font-weight: 600;
+      margin: 4px 0 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    .recap-detail { list-style: none; padding: 0; margin: 0; font-size: 13px; color: var(--doux); }
+    .recap-detail li { display: flex; justify-content: space-between; gap: 6px; margin-top: 4px; }
+    .recap-detail span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    /* --- Titres et listes (utilisés sur tous les onglets) --- */
+    .titre-vue { font-family: var(--police-titre); font-size: 32px; font-weight: 600; margin: 28px 0 16px; }
+    h2 { font-family: var(--police-titre); font-size: 20px; font-weight: 600; margin: 28px 0 12px; }
+    h3 { font-size: 16px; font-weight: 800; margin: 0 0 14px; }
+    .liste { list-style: none; padding: 0; margin: 0; }
+    .liste li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--carte);
+      padding: 12px 14px;
+      border-radius: 18px;
+      margin-bottom: 8px;
+      box-shadow: var(--ombre);
+    }
+    .liste li.cliquable { cursor: pointer; }
+    .liste li.cliquable:active { transform: scale(0.98); }
+    .infos { flex: 1; min-width: 0; }
+    .infos .nom { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .infos .sous-texte { color: var(--doux); font-size: 13px; margin-top: 2px; }
+    .sous-texte.fait { color: var(--vert); font-weight: 600; }
+    .montant { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .montant.positif { color: var(--vert); }
+    .supprimer {
+      background: none;
+      border: none;
+      color: var(--doux);
+      font-size: 22px;
+      padding: 4px 6px;
+      cursor: pointer;
+    }
+    .vide { color: var(--doux); text-align: center; margin: 16px 0; }
+
+    /* Pastille colorée avec une icône, au début des lignes et des cartes */
+    .pastille {
+      flex: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center; /* centre l'icône dans la pastille */
+      font-size: 21px;
+      background: var(--creux);
+    }
+
+    /* --- Totaux par catégorie (barres horizontales) --- */
+    .ligne-categorie { margin-bottom: 16px; }
+    .ligne-categorie:last-child { margin-bottom: 0; }
+    .entete-categorie { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 700; }
+    .entete-categorie .montant { font-weight: 700; }
+    .piste { position: relative; height: 10px; margin-top: 6px; background: var(--creux); border-radius: 5px; }
+    .barre { height: 100%; background: var(--accent); border-radius: 5px; min-width: 4px; }
+    .barre.depasse { background: var(--rouge); }
+    /* Petit trait vertical qui montre où est le plafond */
+    .repere-plafond {
+      position: absolute;
+      top: -3px;
+      bottom: -3px;
+      width: 3px;
+      margin-left: -1.5px;
+      background: var(--texte);
+      border-radius: 2px;
+    }
+    .statut { font-size: 12px; font-weight: 700; margin-top: 4px; }
+    .statut.attention { color: var(--orange); }
+    .statut.depasse { color: var(--rouge); }
+
+    /* --- Le graphique d'évolution du Reste --- */
+    .graphique-cadre { position: relative; padding: 12px 8px 6px; }
+    #graphique {
+      display: block;
+      width: 100%;
+      height: 190px;
+      touch-action: pan-y; /* glisser à la verticale fait défiler la page, à l'horizontale explore la courbe */
+    }
+    #graphique text { fill: var(--doux); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bulle {
+      position: absolute;
+      pointer-events: none; /* la bulle ne doit pas "attraper" le doigt */
+      transform: translate(-50%, calc(-100% - 12px)); /* centrée au-dessus du point */
+      background: var(--carte);
+      border: 1px solid var(--bordure);
+      box-shadow: 0 6px 20px rgba(45, 38, 64, 0.12);
+      border-radius: 12px;
+      padding: 7px 11px;
+      font-size: 13px;
+      white-space: nowrap;
+      color: var(--doux);
+    }
+    .bulle strong, .bulle span { display: block; }
+    .bulle strong { color: var(--texte); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+    /* --- Onglet Investissements et crédits --- */
+    .credit {
+      background: var(--carte);
+      border-radius: 24px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: var(--ombre);
+    }
+    .titre-carte { display: flex; align-items: center; gap: 12px; }
+    .credit h3 { margin: 0; font-size: 17px; }
+    .credit h4 { font-size: 14px; font-weight: 800; margin: 18px 0 8px; }
+    .credit .sous-titre { color: var(--doux); font-size: 13px; margin-top: 2px; }
+    .credit .etiquette { margin-top: 16px; }
+    .gros-montant {
+      font-family: var(--police-titre);
+      font-size: 34px;
+      font-weight: 600;
+      margin: 2px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .progression { height: 10px; background: var(--creux); border-radius: 5px; margin: 10px 0 6px; overflow: hidden; }
+    .progression div { height: 100%; background: linear-gradient(90deg, var(--accent), var(--rose)); border-radius: 5px; }
+    .chiffres { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    .chiffre { background: var(--creux); border-radius: 14px; padding: 10px 12px; }
+    .chiffre .etiquette, .credit .chiffre .etiquette { margin-top: 0; font-size: 10.5px; }
+    .chiffre strong { display: block; margin-top: 4px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .credit .liste li { background: var(--creux); box-shadow: none; }
+    details summary { cursor: pointer; color: var(--accent); font-size: 14px; font-weight: 700; margin-top: 14px; }
+    /* Le tableau peut être plus large que l'écran : il défile dans son cadre, pas la page */
+    .tableau-cadre { overflow: auto; max-height: 360px; margin-top: 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+    th, td { padding: 6px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grille); }
+    th:first-child, td:first-child { text-align: left; }
+    th { position: sticky; top: 0; background: var(--carte); color: var(--doux); font-weight: 700; }
+    tr.passee td { color: var(--doux); }
+    .resume { margin-top: 0; }
+    .resume .chiffre { padding: 16px; border-radius: 22px; }
+    .resume .chiffre:first-child { background: linear-gradient(135deg, #DDF5E9, #E8F7FF); }
+    .resume .chiffre:last-child { background: linear-gradient(135deg, #ECE7FF, #FFE5F0); }
+    .resume .chiffre strong { font-family: var(--police-titre); font-size: 24px; font-weight: 600; }
+
+    /* "Voir le détail" en bas des cartes : un <details> avec un trait de séparation */
+    details.plus { margin-top: 14px; border-top: 1px solid var(--grille); }
+    details.plus > summary {
+      list-style: none;          /* enlève le petit triangle par défaut */
+      margin-top: 0;
+      padding-top: 12px;
+    }
+    details.plus > summary::-webkit-details-marker { display: none; } /* le triangle sur Safari */
+    details.plus > summary::after { content: " ▾"; }
+    details.plus[open] > summary::after { content: " ▴"; }
+    /* Le texte du lien change selon que le détail est ouvert ou fermé */
+    details.plus[open] > summary .voir,
+    details.plus:not([open]) > summary .masquer { display: none; }
+    .sous-section {
+      color: var(--doux);
+      font-family: var(--police-texte);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 22px 0 10px;
+    }
+
+    /* --- Écran Réglages --- */
+    .carte {
+      background: var(--carte);
+      border-radius: 24px;
+      padding: 18px;
+      margin-bottom: 10px;
+      box-shadow: var(--ombre);
+    }
+    .aide { color: var(--doux); font-size: 13px; margin: 0 0 12px; line-height: 1.45; }
+    .carte > .aide:last-child { margin-bottom: 0; }
+    .deux-colonnes { display: flex; gap: 10px; }
+    .deux-colonnes label { flex: 1; }
+    .plafonds { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+
+    /* --- Barre d'onglets en bas --- */
+    .onglets {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      background: var(--carte);
+      box-shadow: 0 -4px 24px rgba(45, 38, 64, 0.07);
+      border-radius: 24px 24px 0 0;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .onglets button {
+      flex: 1;
+      height: var(--hauteur-onglets);
+      background: none;
+      border: none;
+      color: var(--doux);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    /* L'icône de l'onglet, posée dans une petite "gélule" quand l'onglet est actif */
+    .onglets .icone {
+      display: block;
+      width: 56px;
+      margin: 0 auto 2px;
+      padding: 4px 0;
+      border-radius: 14px;
+      line-height: 0;
+    }
+    .onglets svg { width: 24px; height: 24px; }
+    .onglets button.actif { color: var(--accent); }
+    .onglets button.actif .icone { background: var(--accent-doux); }
+
+    /* --- Le gros bouton rond (FAB = "floating action button"), posé au-dessus des onglets --- */
+    .fab {
+      position: fixed;
+      right: 20px;
+      bottom: calc(env(safe-area-inset-bottom) + var(--hauteur-onglets) + 16px);
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--rose) 100%);
+      color: white;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 10px 24px -6px rgba(109, 91, 234, 0.6);
+      cursor: pointer;
+    }
+    .fab svg { width: 30px; height: 30px; }
+    .fab:active { transform: scale(0.94); }
+
+    /* --- Message temporaire ("toast") --- */
+    #message {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(env(safe-area-inset-bottom) + var(--hauteur-onglets) + 96px);
+      max-width: calc(100% - 32px);
+      background: var(--texte);
+      color: white;
+      padding: 11px 18px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(45, 38, 64, 0.25);
+      z-index: 10;
+    }
+
+    /* --- Les fenêtres (saisie, récap) --- */
+    dialog {
+      width: min(92vw, 420px);
+      border: none;
+      border-radius: 28px;
+      background: var(--carte);
+      color: var(--texte);
+      padding: 22px;
+      box-shadow: 0 20px 60px rgba(45, 38, 64, 0.2);
+    }
+    dialog::backdrop { background: rgba(45, 38, 64, 0.35); backdrop-filter: blur(3px); }
+    dialog h2 { margin-top: 0; }
+
+    /* Interrupteurs (Dépense / Rentrée / Épargne...) : des boutons radio déguisés */
+    .segments {
+      display: flex;
+      background: var(--creux);
+      border-radius: 14px;
+      padding: 4px;
+      margin-bottom: 14px;
+    }
+    .segments label { flex: 1; margin: 0; position: relative; }
+    .segments input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+    .segments span {
+      display: block;
+      text-align: center;
+      padding: 9px 4px;
+      border-radius: 11px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--doux);
+      cursor: pointer;
+    }
+    .segments input:checked + span { background: var(--carte); color: var(--accent); box-shadow: var(--ombre); }
+    .segments input:focus-visible + span { outline: 2px solid var(--accent); }
+
+    /* --- Champs et boutons --- */
+    label { display: block; color: var(--doux); font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+    input, select {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      padding: 12px 14px;
+      font-size: 16px; /* 16px minimum, sinon Safari iPhone zoome tout seul sur le champ */
+      color: var(--texte);
+      background: var(--creux);
+      border: 2px solid transparent;
+      border-radius: 14px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); background: var(--carte); }
+    input::placeholder { color: #A9A1B8; }
+    #champ-montant { font-family: var(--police-titre); font-size: 30px; font-weight: 600; }
+
+    /* Case à cocher sur la même ligne que son texte */
+    .case { display: flex; align-items: center; gap: 10px; color: var(--texte); font-size: 15px; }
+    .case input {
+      flex: none;
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      accent-color: var(--accent); /* la couleur de la coche */
+    }
+
+    .boutons { display: flex; gap: 8px; margin-top: 6px; }
+    .boutons button, .boutons .bouton-fichier, .pleine-largeur {
+      flex: 1;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 800;
+      border-radius: 16px;
+      border: none;
+      cursor: pointer;
+      text-align: center;
+      margin: 0;
+    }
+    .pleine-largeur { width: 100%; }
+    .principal { background: var(--accent); color: white; }
+    .principal:active { transform: scale(0.98); }
+    .secondaire { background: var(--accent-doux); color: var(--accent); }
+  </style>
+</head>
+
+<body>
+  <!-- ===== 3. HTML : le contenu et la structure ===== -->
+
+  <!-- ----- Onglet 1 : Budget ----- -->
+  <section id="vue-budget">
+    <nav class="navigation-periode">
+      <button id="periode-precedente" class="fleche" aria-label="Période précédente">‹</button>
+      <span id="nom-periode"></span>
+      <button id="periode-suivante" class="fleche" aria-label="Période suivante">›</button>
+    </nav>
+
+    <header class="entete">
+      <div class="etiquette" id="etiquette-reste">Reste</div>
+      <div id="reste">0 €</div>
+      <div class="detail">
+        <span>Salaire <strong id="total-revenu"></strong></span>
+        <span id="bloc-rentrees">Rentrées <strong id="total-rentrees"></strong></span>
+        <span>Fixes <strong id="total-fixes"></strong></span>
+        <span>Dépenses <strong id="total-depenses"></strong></span>
+        <span id="bloc-epargne-ponctuelle">Épargne <strong id="total-epargne-ponctuelle"></strong></span>
+      </div>
+      <div id="info-salaire"></div>
+      <button id="bouton-recap" class="lien-recap" hidden>Voir le récap</button>
+    </header>
+
+    <h2>Frais fixes</h2>
+    <ul id="liste-fixes" class="liste"></ul>
+    <p id="vide-fixes" class="vide">Ajoute tes frais fixes dans l'onglet Réglages.</p>
+
+    <h2 id="titre-mouvements">Dépenses et rentrées</h2>
+    <ul id="liste-mouvements" class="liste"></ul>
+    <p id="vide-mouvements" class="vide">Aucune dépense ni rentrée sur cette période.</p>
+
+    <h2>Par catégorie</h2>
+    <div id="categories" class="carte"></div>
+    <p id="vide-categories" class="vide">Pas encore de dépense à répartir.</p>
+
+    <h2>Évolution du Reste</h2>
+    <div class="carte graphique-cadre">
+      <svg id="graphique" role="img"></svg>
+      <div id="bulle" class="bulle" hidden></div>
+    </div>
+  </section>
+
+  <!-- ----- Onglet 2 : Investissements et crédits ----- -->
+  <section id="vue-credits" hidden>
+    <h1 class="titre-vue">Investissements</h1>
+
+    <div id="resume-investissements" class="chiffres resume">
+      <div class="chiffre">
+        <div class="etiquette">Épargne</div>
+        <strong id="total-epargne"></strong>
+      </div>
+      <div class="chiffre">
+        <div class="etiquette">Restant dû</div>
+        <strong id="credits-total"></strong>
+      </div>
+    </div>
+
+    <h2 id="titre-epargne">Épargne</h2>
+    <div id="liste-epargnes"></div>
+
+    <h2 id="titre-credits">Crédits</h2>
+    <p id="credits-mensualites" class="aide"></p>
+    <div id="liste-credits"></div>
+
+    <p id="vide-credits" class="vide">Rien pour l'instant.<br>
+      Ajoute ton épargne et tes crédits dans Réglages → Investissements et crédits.</p>
+  </section>
+
+  <!-- ----- Onglet 3 : Réglages ----- -->
+  <section id="vue-reglages" hidden>
+    <h1 class="titre-vue">Réglages</h1>
+
+    <div class="carte">
+      <label>
+        Salaire net mensuel (€)
+        <input id="champ-salaire" inputmode="decimal" autocomplete="off" placeholder="0,00">
+      </label>
+      <p class="aide" id="aide-salaire"></p>
+    </div>
+
+    <h2>Frais fixes</h2>
+    <ul id="liste-fixes-reglages" class="liste"></ul>
+    <p id="vide-fixes-reglages" class="vide">Aucun frais fixe pour l'instant.</p>
+
+    <form id="form-fixe" class="carte">
+      <h3 id="titre-form-fixe">Ajouter un frais fixe</h3>
+      <label>
+        Nom
+        <input id="fixe-nom" autocomplete="off" placeholder="Ex : Loyer" maxlength="40" required>
+      </label>
+      <div class="deux-colonnes">
+        <label>
+          Montant (€)
+          <input id="fixe-montant" inputmode="decimal" autocomplete="off" placeholder="0,00" required>
+        </label>
+        <label>
+          Jour du prélèvement
+          <input id="fixe-jour" type="number" inputmode="numeric" min="1" max="31" placeholder="5" required>
+        </label>
+      </div>
+      <div class="boutons">
+        <button type="button" id="fixe-annuler" class="secondaire" hidden>Annuler</button>
+        <button type="submit" id="fixe-valider" class="principal">Ajouter</button>
+      </div>
+    </form>
+
+    <h2>Plafonds par catégorie</h2>
+    <div class="carte">
+      <p class="aide">Montant maximum par période de paie. Laisse vide pour ne pas fixer de plafond.
+        Une alerte s'affiche à partir de 80 %.</p>
+      <div id="plafonds" class="plafonds"></div>
+    </div>
+
+    <h2>Investissements et crédits</h2>
+
+    <h3 class="sous-section">Épargne</h3>
+    <ul id="liste-epargnes-reglages" class="liste"></ul>
+    <p id="vide-epargnes-reglages" class="vide">Aucun compte d'épargne pour l'instant.</p>
+
+    <form id="form-epargne" class="carte">
+      <h3 id="titre-form-epargne">Ajouter un compte d'épargne</h3>
+      <label>
+        Nom
+        <input id="epargne-nom" autocomplete="off" placeholder="Ex : Livret A" maxlength="40" required>
+      </label>
+      <div class="deux-colonnes">
+        <label>
+          Solde (€)
+          <input id="epargne-solde" inputmode="decimal" autocomplete="off" placeholder="0" required>
+        </label>
+        <label>
+          au
+          <input id="epargne-date" type="date" required>
+        </label>
+      </div>
+      <div class="deux-colonnes">
+        <label>
+          Taux annuel (%)
+          <input id="epargne-taux" inputmode="decimal" autocomplete="off" placeholder="Facultatif">
+        </label>
+        <label>
+          Plafond (€)
+          <input id="epargne-plafond" inputmode="decimal" autocomplete="off" placeholder="Aucun">
+        </label>
+      </div>
+      <div class="deux-colonnes">
+        <label>
+          Versement mensuel (€)
+          <input id="epargne-versement" inputmode="decimal" autocomplete="off" placeholder="Aucun">
+        </label>
+        <label>
+          Jour du versement
+          <input id="epargne-jour" type="number" inputmode="numeric" min="1" max="31" placeholder="5">
+        </label>
+      </div>
+      <label class="case">
+        <input id="epargne-budget" type="checkbox" checked>
+        Compter le versement dans mon budget (frais fixes)
+      </label>
+      <p class="aide">Le solde est estimé en ajoutant tes versements mensuels. Mets-le à jour de temps
+        en temps avec le vrai montant de ta banque. Les intérêts ne sont pas ajoutés automatiquement :
+        sur un livret, ils sont versés une fois par an.</p>
+      <div class="boutons">
+        <button type="button" id="epargne-annuler" class="secondaire" hidden>Annuler</button>
+        <button type="submit" id="epargne-valider" class="principal">Ajouter</button>
+      </div>
+    </form>
+
+    <h3 class="sous-section">Crédits</h3>
+    <ul id="liste-credits-reglages" class="liste"></ul>
+    <p id="vide-credits-reglages" class="vide">Aucun crédit pour l'instant.</p>
+
+    <form id="form-credit" class="carte">
+      <h3 id="titre-form-credit">Ajouter un crédit</h3>
+      <label>
+        Nom
+        <input id="credit-nom" autocomplete="off" placeholder="Ex : Crédit immobilier" maxlength="40" required>
+      </label>
+      <div class="deux-colonnes">
+        <label>
+          Montant emprunté (€)
+          <input id="credit-capital" inputmode="decimal" autocomplete="off" placeholder="200 000" required>
+        </label>
+        <label>
+          Taux annuel (%)
+          <input id="credit-taux" inputmode="decimal" autocomplete="off" placeholder="3,45" required>
+        </label>
+      </div>
+      <div class="deux-colonnes">
+        <label>
+          Durée (en mois)
+          <input id="credit-duree" type="number" inputmode="numeric" min="1" max="600" placeholder="240" required>
+        </label>
+        <label>
+          1re échéance
+          <input id="credit-debut" type="date" required>
+        </label>
+      </div>
+      <label>
+        Assurance par mois (€, facultatif)
+        <input id="credit-assurance" inputmode="decimal" autocomplete="off" placeholder="0">
+      </label>
+      <label class="case">
+        <input id="credit-budget" type="checkbox" checked>
+        Compter l'échéance dans mon budget (frais fixes)
+      </label>
+      <p class="aide">20 ans = 240 mois. Le taux à indiquer est le taux nominal (hors assurance)
+        écrit dans ton offre de prêt. Si l'échéance est comptée dans le budget, retire-la de
+        tes frais fixes pour ne pas la compter deux fois.</p>
+      <div class="boutons">
+        <button type="button" id="credit-annuler" class="secondaire" hidden>Annuler</button>
+        <button type="submit" id="credit-valider" class="principal">Ajouter</button>
+      </div>
+    </form>
+
+    <h2>Sauvegarde</h2>
+    <div class="carte">
+      <p class="aide" id="info-sauvegarde"></p>
+      <div class="boutons">
+        <button type="button" id="bouton-exporter" class="principal">Exporter</button>
+        <!-- Un <label> qui contient un champ fichier caché : le toucher ouvre le choix du fichier -->
+        <label class="bouton-fichier secondaire">
+          Importer
+          <input id="champ-import" type="file" accept="application/json,.json" hidden>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ----- Barre d'onglets ----- -->
+  <nav class="onglets">
+    <!-- Icônes dessinées en SVG : des traits arrondis, couleur = celle du texte (currentColor) -->
+    <button data-onglet="budget" class="actif">
+      <span class="icone">
+        <!-- un porte-monnaie -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M16 7V5.5A1.5 1.5 0 0 0 14.5 4H6a3 3 0 0 0-3 3"/>
+          <rect x="3" y="7" width="18" height="13" rx="3.5"/>
+          <path d="M21 11.5h-3.5a2 2 0 0 0 0 4H21"/>
+        </svg>
+      </span>Budget
+    </button>
+    <button data-onglet="credits">
+      <span class="icone">
+        <!-- une pousse qui grandit -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 21v-9"/>
+          <path d="M12 12c0-4.4 3.1-7.5 8-7.5 0 4.9-3.1 7.5-8 7.5z"/>
+          <path d="M12 15c0-3.3-2.4-5.5-7-5.5 0 3.9 2.4 5.5 7 5.5z"/>
+        </svg>
+      </span>Investissements
+    </button>
+    <button data-onglet="reglages">
+      <span class="icone">
+        <!-- des curseurs de réglage -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 7h9M18 7h2M4 17h3M12 17h8"/>
+          <circle cx="15.5" cy="7" r="2.5"/>
+          <circle cx="9.5" cy="17" r="2.5"/>
+        </svg>
+      </span>Réglages
+    </button>
+  </nav>
+
+  <button id="bouton-ajouter" class="fab" aria-label="Ajouter une dépense, une rentrée ou de l'épargne">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14"/>
+    </svg>
+  </button>
+
+  <div id="message" role="status" hidden></div>
+
+  <dialog id="fenetre-saisie">
+    <form id="formulaire">
+      <h2 id="titre-saisie">Nouvelle dépense</h2>
+      <div class="segments" role="radiogroup" aria-label="Type">
+        <label><input type="radio" name="sens" value="depense" checked><span>Dépense</span></label>
+        <label><input type="radio" name="sens" value="rentree"><span>Rentrée</span></label>
+        <label id="segment-epargne"><input type="radio" name="sens" value="epargne"><span>Épargne</span></label>
+      </div>
+      <!-- Visible seulement en mode "Épargne" -->
+      <div id="bloc-epargne" hidden>
+        <div class="segments" role="radiogroup" aria-label="Opération">
+          <label><input type="radio" name="operation" value="versement" checked><span>Versement</span></label>
+          <label><input type="radio" name="operation" value="retrait"><span>Retrait</span></label>
+        </div>
+        <label>
+          Compte
+          <select id="champ-compte"></select>
+        </label>
+      </div>
+      <label>
+        Montant (€)
+        <input id="champ-montant" inputmode="decimal" autocomplete="off" placeholder="0,00" required>
+      </label>
+      <label>
+        Nom
+        <input id="champ-nom" autocomplete="off" placeholder="Ex : Boulangerie" maxlength="40" required>
+      </label>
+      <div class="deux-colonnes">
+        <label id="bloc-categorie">
+          Catégorie
+          <select id="champ-categorie"></select>
+        </label>
+        <label>
+          Date
+          <input id="champ-date" type="date" required>
+        </label>
+      </div>
+      <div class="boutons">
+        <button type="button" id="bouton-annuler" class="secondaire">Annuler</button>
+        <button type="submit" id="bouton-valider" class="principal">Ajouter</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="fenetre-recap">
+    <div class="etiquette" id="recap-periode"></div>
+    <h2>Récap de la période</h2>
+    <div class="etiquette">Solde</div>
+    <div id="recap-solde" class="recap-solde"></div>
+    <p id="recap-phrase" class="aide"></p>
+
+    <div class="recap-colonnes">
+      <div class="recap-bloc">
+        <div class="etiquette">Recettes</div>
+        <div id="recap-recettes" class="recap-total"></div>
+        <ul id="recap-detail-recettes" class="recap-detail"></ul>
+      </div>
+      <div class="recap-bloc">
+        <div class="etiquette">Dépenses</div>
+        <div id="recap-depenses" class="recap-total"></div>
+        <ul id="recap-detail-depenses" class="recap-detail"></ul>
+      </div>
+    </div>
+
+    <button type="button" id="recap-fermer" class="principal pleine-largeur">Fermer</button>
+  </dialog>
+
+  <!-- ===== 4. JAVASCRIPT : le comportement ===== -->
+  <script>
+    // ---------- 4a. Données de départ ----------
+    const CATEGORIES = ["Courses", "Transport", "Restaurant", "Loisirs", "Santé", "Maison", "Autre"];
+
+    // L'icône et la couleur pastel de chaque sorte de ligne
+    const ICONES = {
+      Courses:    { emoji: "🛒", teinte: "#FFEBCF" },
+      Transport:  { emoji: "🚗", teinte: "#DCEEFF" },
+      Restaurant: { emoji: "🍕", teinte: "#FFE0E6" },
+      Loisirs:    { emoji: "🎉", teinte: "#ECE4FF" },
+      Santé:      { emoji: "💊", teinte: "#DDF5E9" },
+      Maison:     { emoji: "🏠", teinte: "#FFF3C4" },
+      Autre:      { emoji: "📦", teinte: "#EFEDF3" },
+      Rentrée:    { emoji: "💸", teinte: "#DDF5E9" },
+      Épargne:    { emoji: "🐷", teinte: "#FFE3F0" },
+      Crédit:     { emoji: "🏡", teinte: "#DCEEFF" },
+      Fixe:       { emoji: "🧾", teinte: "#FFF3C4" },
+    };
+    const emoji = (cle) => (ICONES[cle] || ICONES.Autre).emoji;
+
+    // Une pastille colorée avec l'icône dedans
+    function pastille(cle) {
+      const { emoji, teinte } = ICONES[cle] || ICONES.Autre;
+      const element = creer("span", "pastille", emoji);
+      element.style.background = teinte;
+      element.setAttribute("aria-hidden", "true"); // décoratif : le texte à côté dit déjà tout
+      return element;
+    }
+
+    // Réglages tant que rien n'a été saisi dans l'onglet Réglages.
+    // plafonds ressemblera à { Restaurant: 150, Loisirs: 100 }
+    // credits : [{ id, nom, capital, taux, duree (en mois), premiereEcheance: "2021-03-05", assurance }]
+    // epargnes : [{ id, nom, solde, dateSolde: "2026-11-14", taux, plafond, versement, jourVersement, dansBudget }]
+    const REGLAGES_PAR_DEFAUT = { revenu: 0, fraisFixes: [], plafonds: {}, credits: [], epargnes: [] };
+
+    // ---------- 4b. Lire / écrire dans localStorage ----------
+    // localStorage ne stocke que du texte : on transforme nos objets en texte (JSON) et inversement.
+    function lire(cle, valeurParDefaut) {
+      try {
+        const texte = localStorage.getItem(cle);
+        return texte ? JSON.parse(texte) : valeurParDefaut;
+      } catch {
+        return valeurParDefaut; // si le texte est abîmé ou si le stockage est bloqué
+      }
+    }
+
+    function ecrire(cle, valeur) {
+      localStorage.setItem(cle, JSON.stringify(valeur));
+    }
+
+    function lireReglages() {
+      // { ...a, ...b } = on part des valeurs par défaut et on remplace par ce qui est enregistré
+      return { ...REGLAGES_PAR_DEFAUT, ...lire("budget.reglages", {}) };
+    }
+
+    // Les dépenses ET les rentrées sont rangées ensemble sous la clé "budget.depenses".
+    // Une rentrée a sens: "rentree". Une ligne sans "sens" (les anciennes) est une dépense.
+    function lireMouvements() {
+      return lire("budget.depenses", []);
+    }
+
+    // Trois sortes de lignes : dépense (sans "sens" ou "depense"), rentrée, et épargne.
+    // Une ligne d'épargne a aussi compteId (le livret concerné) et retrait (true ou false).
+    const estRentree = (mouvement) => mouvement.sens === "rentree";
+    const estEpargne = (mouvement) => mouvement.sens === "epargne";
+    const estDepense = (mouvement) => !estRentree(mouvement) && !estEpargne(mouvement);
+
+    // Ce que la ligne fait au budget : + quand l'argent arrive, − quand il part
+    function effetSurBudget(mouvement) {
+      if (estRentree(mouvement)) return mouvement.montant;
+      if (estEpargne(mouvement)) return mouvement.retrait ? mouvement.montant : -mouvement.montant;
+      return -mouvement.montant;
+    }
+
+    // ---------- 4c. Calendrier : date du salaire et des prélèvements ----------
+    // Règle de la paie des agents de l'État : versement 2 jours ouvrés avant le dernier
+    // jour ouvré du mois. En décembre, la paie est avancée avant Noël (vers le 22).
+    // Ces dates sont prévisionnelles : la banque peut créditer 1 ou 2 jours plus tard.
+
+    // "2026-11" pour novembre 2026
+    function cleMois(date) {
+      return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0");
+    }
+
+    // "2026-11-26" : sert à comparer des jours entre eux (et c'est le format des champs date)
+    function cleJour(date) {
+      return cleMois(date) + "-" + String(date.getDate()).padStart(2, "0");
+    }
+
+    // Date de Pâques (calcul astronomique classique dit "de Meeus").
+    // On en a besoin car le lundi de Pâques, l'Ascension et la Pentecôte en dépendent.
+    function paques(annee) {
+      const a = annee % 19, b = Math.floor(annee / 100), c = annee % 100;
+      const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+      const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+      const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+      const m = Math.floor((a + 11 * h + 22 * l) / 451);
+      const mois = Math.floor((h + l - 7 * m + 114) / 31);
+      const jour = ((h + l - 7 * m + 114) % 31) + 1;
+      return new Date(annee, mois - 1, jour);
+    }
+
+    // Les jours fériés français de l'année, rangés dans un Set (une liste sans doublons)
+    function joursFeries(annee) {
+      const p = paques(annee);
+      const apresPaques = (n) => new Date(annee, p.getMonth(), p.getDate() + n);
+      const dates = [
+        new Date(annee, 0, 1),   // Jour de l'an
+        apresPaques(1),          // Lundi de Pâques
+        new Date(annee, 4, 1),   // Fête du travail
+        new Date(annee, 4, 8),   // Victoire 1945
+        apresPaques(39),         // Ascension
+        apresPaques(50),         // Lundi de Pentecôte
+        new Date(annee, 6, 14),  // Fête nationale
+        new Date(annee, 7, 15),  // Assomption
+        new Date(annee, 10, 1),  // Toussaint
+        new Date(annee, 10, 11), // Armistice
+        new Date(annee, 11, 25), // Noël
+      ];
+      return new Set(dates.map(cleJour));
+    }
+
+    // Jour ouvré = ni samedi (6), ni dimanche (0), ni férié
+    function estOuvre(date, feries) {
+      const jourSemaine = date.getDay();
+      return jourSemaine !== 0 && jourSemaine !== 6 && !feries.has(cleJour(date));
+    }
+
+    // mois : 0 = janvier ... 11 = décembre (c'est la convention de JavaScript)
+    function dateDeLaPaie(annee, mois) {
+      const feries = joursFeries(annee);
+
+      if (mois === 11) {
+        // Décembre : le 22, ou le jour ouvré d'avant s'il tombe un week-end
+        const date = new Date(annee, 11, 22);
+        while (!estOuvre(date, feries)) date.setDate(date.getDate() - 1);
+        return date;
+      }
+
+      // new Date(annee, mois + 1, 0) = le "jour 0" du mois suivant = le dernier jour de ce mois
+      const date = new Date(annee, mois + 1, 0);
+      while (!estOuvre(date, feries)) date.setDate(date.getDate() - 1); // dernier jour ouvré
+
+      let joursARecul = 2;
+      while (joursARecul > 0) {
+        date.setDate(date.getDate() - 1);
+        if (estOuvre(date, feries)) joursARecul--;
+      }
+      return date;
+    }
+
+    // Date du prélèvement d'un frais fixe un mois donné.
+    // Si le jour n'existe pas (ex. le 31 en novembre), on prend le dernier jour du mois.
+    function dateDuPrelevement(jour, annee, mois) {
+      const dernierJour = new Date(annee, mois + 1, 0).getDate();
+      return new Date(annee, mois, Math.min(jour, dernierJour));
+    }
+
+    function aujourdhui() {
+      const maintenant = new Date();
+      return new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate()); // à minuit
+    }
+
+    function veille(date) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
+    }
+
+    // ----- La période de budget : d'une paie (incluse) à la paie suivante (exclue) -----
+
+    function paieSuivante(paie) {
+      const mois = paie.getMonth();
+      return dateDeLaPaie(mois === 11 ? paie.getFullYear() + 1 : paie.getFullYear(), (mois + 1) % 12);
+    }
+
+    function paiePrecedente(paie) {
+      const mois = paie.getMonth();
+      return dateDeLaPaie(mois === 0 ? paie.getFullYear() - 1 : paie.getFullYear(), (mois + 11) % 12);
+    }
+
+    function periodeEnCours(jour) {
+      let debut = dateDeLaPaie(jour.getFullYear(), jour.getMonth());
+      // La paie de ce mois n'est pas encore arrivée : on vit encore sur celle du mois dernier
+      if (debut > jour) debut = paiePrecedente(debut);
+      return { debut, fin: paieSuivante(debut) };
+    }
+
+    // decalage = 0 : période en cours ; -1 : la précédente ; -2 : celle d'avant...
+    function periodeDecalee(decalage) {
+      let { debut } = periodeEnCours(aujourdhui());
+      for (let n = 0; n < -decalage; n++) debut = paiePrecedente(debut);
+      return { debut, fin: paieSuivante(debut) };
+    }
+
+    // L'inverse : quel décalage pour la période qui contient cette date ?
+    function decalagePour(date) {
+      let decalage = 0;
+      while (periodeDecalee(decalage).debut > date && decalage > -240) decalage--;
+      return decalage;
+    }
+
+    // Chaque frais fixe compte une fois par période : à sa première date à partir de la paie.
+    // Ex. paie le 26 nov. : un loyer du 5 tombe le 5 déc., un abonnement du 28 le 28 nov.
+    function prelevementDeLaPeriode(jourDuMois, debut) {
+      let date = dateDuPrelevement(jourDuMois, debut.getFullYear(), debut.getMonth());
+      if (date < debut) {
+        // Déjà passé ce mois-là : ce sera le mois suivant (JavaScript gère le passage à l'année d'après)
+        date = dateDuPrelevement(jourDuMois, debut.getFullYear(), debut.getMonth() + 1);
+      }
+      return date;
+    }
+
+    // ---------- 4c bis. Les crédits : le tableau d'amortissement ----------
+    // Prêt "classique" : la mensualité est la même tous les mois. Au début, elle paie
+    // surtout des intérêts ; à la fin, surtout du capital.
+
+    const arrondi = (nombre) => Math.round(nombre * 100) / 100; // au centime
+
+    // La formule bancaire de la mensualité (hors assurance) :
+    // capital × t / (1 − (1 + t)^−n), avec t = taux mensuel et n = nombre de mois
+    function mensualiteCredit(credit) {
+      const t = credit.taux / 100 / 12;
+      if (t === 0) return arrondi(credit.capital / credit.duree); // prêt à taux zéro
+      return arrondi((credit.capital * t) / (1 - (1 + t) ** -credit.duree));
+    }
+
+    // Une ligne par échéance : date, part de capital, part d'intérêts, restant dû après paiement
+    function tableauAmortissement(credit) {
+      const t = credit.taux / 100 / 12;
+      const mensualite = mensualiteCredit(credit);
+      const assurance = credit.assurance || 0;
+      const [annee, mois, jour] = credit.premiereEcheance.split("-").map(Number);
+
+      const lignes = [];
+      let restantDu = credit.capital;
+      for (let numero = 1; numero <= credit.duree; numero++) {
+        const interets = arrondi(restantDu * t);               // ce que coûte l'argent encore dû ce mois-ci
+        const capital = numero === credit.duree
+          ? restantDu                                           // dernière échéance : on solde tout
+          : Math.min(restantDu, arrondi(mensualite - interets)); // le reste de la mensualité rembourse le capital
+        restantDu = arrondi(restantDu - capital);
+        lignes.push({
+          numero,
+          date: dateDuPrelevement(jour, annee, mois - 1 + numero - 1), // un mois de plus à chaque échéance
+          capital,
+          interets,
+          assurance,
+          total: arrondi(capital + interets + assurance),
+          restantDu,
+        });
+      }
+      return lignes;
+    }
+
+    // Où en est ce crédit aujourd'hui ?
+    function situationCredit(credit, jour) {
+      const tableau = tableauAmortissement(credit);
+      const passees = tableau.filter(l => l.date <= jour);
+      const aVenir = tableau.filter(l => l.date > jour);
+      const totalDe = (lignes, champ) => arrondi(lignes.reduce((total, l) => total + l[champ], 0));
+      const restantDu = passees.length ? passees[passees.length - 1].restantDu : credit.capital;
+      return {
+        tableau,
+        aVenir,
+        restantDu,
+        rembourse: arrondi(credit.capital - restantDu),
+        mensualite: arrondi(mensualiteCredit(credit) + (credit.assurance || 0)),
+        interetsRestants: totalDe(aVenir, "interets"),
+        coutTotal: totalDe(tableau, "interets") + totalDe(tableau, "assurance"),
+        fin: tableau[tableau.length - 1].date,
+      };
+    }
+
+    // ---------- 4c ter. L'épargne : solde estimé ----------
+
+    // "2026-11-14" → la date correspondante (à minuit)
+    function dateDepuisCle(cle) {
+      const [annee, mois, jour] = cle.split("-").map(Number);
+      return new Date(annee, mois - 1, jour);
+    }
+
+    // Combien de versements mensuels ont eu lieu après la date du solde, jusqu'à aujourd'hui ?
+    function versementsDepuis(compte, jour) {
+      if (!compte.versement) return 0;
+      const depart = dateDepuisCle(compte.dateSolde);
+      let nombre = 0;
+      for (let i = 0; ; i++) { // une boucle sans fin... arrêtée par le "break" plus bas
+        const date = dateDuPrelevement(compte.jourVersement, depart.getFullYear(), depart.getMonth() + i);
+        if (date > jour) break;
+        if (date > depart) nombre++; // un versement le jour même du solde est déjà compté dedans
+      }
+      return nombre;
+    }
+
+    // Le moment exact où le solde a été saisi. Les opérations faites avant sont déjà dedans.
+    // (Anciens comptes sans heure enregistrée : on prend la fin de la journée du solde.)
+    function momentDuSolde(compte) {
+      if (compte.soldeAu) return new Date(compte.soldeAu);
+      const date = dateDepuisCle(compte.dateSolde);
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+    }
+
+    function soldeEstime(compte, jour) {
+      const versements = versementsDepuis(compte, jour);
+      // Les versements et retraits ponctuels saisis avec le bouton + après la saisie du solde
+      const moment = momentDuSolde(compte);
+      const operations = lireMouvements().filter(m =>
+        estEpargne(m) && m.compteId === compte.id && new Date(m.date) > moment);
+      // Pour le livret c'est l'inverse du budget : un versement ajoute, un retrait enlève
+      const totalOperations = operations.reduce((total, m) => total - effetSurBudget(m), 0);
+      return {
+        versements,
+        operations: operations.length,
+        solde: arrondi(compte.solde + versements * (compte.versement || 0) + totalOperations),
+      };
+    }
+
+    // ---------- 4d. Petits outils ----------
+    const formatEuro = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+    const formatEuroRond = new Intl.NumberFormat("fr-FR", {
+      style: "currency", currency: "EUR", maximumFractionDigits: 0,
+    });
+    const formatJourLong = (date) =>
+      date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+    const formatJourCourt = (date) =>
+      date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+
+    // Accepte "12,50" comme "12.50". Renvoie null si ce n'est pas un montant valable.
+    function lireMontant(texte) {
+      const nombre = parseFloat(texte.replace(",", ".").replace(/\s/g, ""));
+      if (!Number.isFinite(nombre) || nombre <= 0) return null;
+      return Math.round(nombre * 100) / 100; // arrondi au centime
+    }
+
+    // Comme lireMontant, mais accepte 0 (un compte peut être vide)
+    function lireMontantOuZero(texte) {
+      const nombre = parseFloat(texte.replace(",", ".").replace(/\s/g, ""));
+      if (!Number.isFinite(nombre) || nombre < 0) return null;
+      return Math.round(nombre * 100) / 100;
+    }
+
+    // Pour le taux : accepte 0, refuse au-dessus de 30 %
+    function lireTaux(texte) {
+      const nombre = parseFloat(texte.replace(",", ".").replace(/\s/g, ""));
+      if (!Number.isFinite(nombre) || nombre < 0 || nombre > 30) return null;
+      return nombre;
+    }
+
+    const formatTaux = (taux) =>
+      new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 3 }).format(taux) + " %";
+    const formatMoisAnnee = (date) => date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    const formatDateComplete = (date) =>
+      date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+    // 246 → "20 ans et 6 mois"
+    function dureeLisible(mois) {
+      const ans = Math.floor(mois / 12);
+      const reste = mois % 12;
+      const texteAns = ans ? ans + (ans > 1 ? " ans" : " an") : "";
+      const texteMois = reste ? reste + " mois" : "";
+      return [texteAns, texteMois].filter(Boolean).join(" et ");
+    }
+
+    // Raccourci pour créer un élément : creer("div", "nom-de-classe", "texte")
+    function creer(balise, classe, texte) {
+      const element = document.createElement(balise);
+      if (classe) element.className = classe;
+      if (texte !== undefined) element.textContent = texte;
+      return element;
+    }
+
+    // 12.5 → "12,5" pour remettre un montant dans un champ
+    const montantPourChamp = (nombre) => String(nombre).replace(".", ",");
+
+    function somme(liste) {
+      return liste.reduce((total, element) => total + element.montant, 0);
+    }
+
+    function identifiantUnique() {
+      return Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+    }
+
+    // Garde les mouvements dont la date est dans la période [debut, fin[
+    function dansLaPeriode(mouvements, debut, fin) {
+      return mouvements.filter(m => {
+        const date = new Date(m.date);
+        return date >= debut && date < fin;
+      });
+    }
+
+    // Petit outil pour fabriquer une ligne de liste : nom, sous-texte, montant, bouton ×
+    function creerLigne({ icone, nom, sousTexte, sousTexteFait, montant, montantPositif, auClic, auClicSupprimer }) {
+      const li = document.createElement("li");
+      if (icone) li.append(pastille(icone)); // la pastille colorée au début de la ligne
+
+      const infos = document.createElement("div");
+      infos.className = "infos";
+      const elNom = document.createElement("div");
+      elNom.className = "nom";
+      elNom.textContent = nom; // textContent : le texte tapé reste du simple texte (jamais du code)
+      const elSous = document.createElement("div");
+      elSous.className = "sous-texte" + (sousTexteFait ? " fait" : "");
+      elSous.textContent = sousTexte;
+      infos.append(elNom, elSous);
+
+      const elMontant = document.createElement("div");
+      elMontant.className = "montant" + (montantPositif ? " positif" : "");
+      elMontant.textContent = montant;
+
+      li.append(infos, elMontant);
+
+      if (auClic) {
+        li.classList.add("cliquable");
+        li.addEventListener("click", auClic);
+      }
+
+      if (auClicSupprimer) {
+        const bouton = document.createElement("button");
+        bouton.className = "supprimer";
+        bouton.textContent = "×";
+        bouton.setAttribute("aria-label", "Supprimer " + nom);
+        bouton.addEventListener("click", (evenement) => {
+          evenement.stopPropagation(); // sinon le clic "remonte" jusqu'à la ligne et ouvre la modification
+          auClicSupprimer();
+        });
+        li.append(bouton);
+      }
+      return li;
+    }
+
+    // Affiche un message en bas de l'écran pendant quelques secondes
+    let minuteurMessage;
+    function afficherMessage(texte) {
+      const message = $("message");
+      message.textContent = texte;
+      message.hidden = false;
+      clearTimeout(minuteurMessage); // si un message était déjà affiché, on repart à zéro
+      minuteurMessage = setTimeout(() => (message.hidden = true), 4000);
+    }
+
+    // ---------- 4e. Récupérer les éléments de la page ----------
+    const $ = (id) => document.getElementById(id); // raccourci pour écrire moins
+
+    const fenetre = $("fenetre-saisie");
+    const formulaire = $("formulaire");
+    const champMontant = $("champ-montant");
+    const champNom = $("champ-nom");
+    const champCategorie = $("champ-categorie");
+    const champDate = $("champ-date");
+    const champSalaire = $("champ-salaire");
+    const formFixe = $("form-fixe");
+    const boutonAjouter = $("bouton-ajouter");
+
+    for (const categorie of CATEGORIES) {
+      const option = document.createElement("option");
+      option.value = categorie;                             // ce qui est enregistré
+      option.textContent = emoji(categorie) + " " + categorie; // ce qui est affiché
+      champCategorie.append(option);
+    }
+
+    // ---------- 4f. L'état de l'écran (ce qui n'est pas enregistré) ----------
+    let decalagePeriode = 0;     // quelle période on regarde (0 = en cours)
+    let mouvementEnCours = null; // la ligne qu'on modifie dans la fenêtre (null = nouvelle ligne)
+    let fixeEnCours = null;      // le frais fixe qu'on modifie dans les réglages
+    let creditEnCours = null;    // le crédit qu'on modifie dans les réglages
+
+    // ---------- 4f bis. Le bilan d'une période (sert à l'écran Budget ET au récap) ----------
+
+    // Les frais fixes d'une période = ceux des réglages + les échéances des crédits liés au budget.
+    // Chacun reçoit sa date de prélèvement dans la période. Le résultat est trié par date.
+    function fraisFixesDeLaPeriode(reglages, debut) {
+      const fixes = reglages.fraisFixes.map(fixe => ({ ...fixe, date: prelevementDeLaPeriode(fixe.jour, debut) }));
+
+      for (const credit of reglages.credits) {
+        if (credit.dansBudget === false) continue; // case décochée : ce crédit reste hors budget
+        const jourEcheance = Number(credit.premiereEcheance.split("-")[2]);
+        const date = prelevementDeLaPeriode(jourEcheance, debut);
+        // On cherche l'échéance de cette date dans le tableau d'amortissement.
+        // Il n'y en a pas si le crédit n'a pas encore commencé ou s'il est fini.
+        const echeance = tableauAmortissement(credit).find(ligne => cleJour(ligne.date) === cleJour(date));
+        if (echeance) {
+          fixes.push({ id: credit.id, nom: credit.nom, montant: echeance.total, date, credit: true });
+        }
+      }
+
+      // Les versements automatiques vers l'épargne : l'argent quitte le compte courant
+      for (const compte of reglages.epargnes) {
+        if (!compte.versement || compte.dansBudget === false) continue;
+        const date = prelevementDeLaPeriode(compte.jourVersement, debut);
+        fixes.push({ id: compte.id, nom: compte.nom, montant: compte.versement, date, epargne: true });
+      }
+      return fixes.sort((a, b) => a.date - b.date);
+    }
+
+    function bilanPeriode(debut, fin) {
+      const reglages = lireReglages();
+      const mouvements = dansLaPeriode(lireMouvements(), debut, fin)
+        .sort((a, b) => new Date(b.date) - new Date(a.date)); // le plus récent en premier
+      const depenses = mouvements.filter(estDepense);
+      const rentrees = mouvements.filter(estRentree);
+      const epargnes = mouvements.filter(estEpargne);
+
+      const salaire = reglages.revenu;
+      const totalRentrees = somme(rentrees);
+      const fixes = fraisFixesDeLaPeriode(reglages, debut);
+      const totalFixes = somme(fixes);
+      const totalDepenses = somme(depenses);
+      // Épargne ponctuelle (bouton +) : versements d'un côté, retraits de l'autre
+      const versementsPonctuels = somme(epargnes.filter(m => !m.retrait));
+      const retraitsEpargne = somme(epargnes.filter(m => m.retrait));
+      // Tout ce qui est parti sur l'épargne : versements automatiques (dans les fixes) + ponctuels
+      const totalEpargne = somme(fixes.filter(f => f.epargne)) + versementsPonctuels;
+
+      const recettes = salaire + totalRentrees + retraitsEpargne;          // tout ce qui est entré
+      const sorties = totalFixes + totalDepenses + versementsPonctuels;    // tout ce qui est sorti
+      return {
+        mouvements, depenses, fixes, salaire, totalRentrees, totalFixes, totalDepenses,
+        totalEpargne, versementsPonctuels, retraitsEpargne, recettes, sorties,
+        // La formule : solde (ou Reste) = tout ce qui est entré − tout ce qui est sorti
+        solde: recettes - sorties,
+      };
+    }
+
+    // ---------- 4g. Afficher l'onglet Budget ----------
+    function afficherBudget() {
+      const reglages = lireReglages();
+      const jour = aujourdhui();
+      const { debut, fin } = periodeDecalee(decalagePeriode);
+      const enCours = decalagePeriode === 0;
+      const dernierJour = veille(fin);
+      // Pour une période passée, on fait comme si on était à son dernier jour
+      const reference = enCours ? jour : dernierJour;
+
+      // "solde: reste" = on récupère la valeur "solde" mais on l'appelle "reste" ici
+      const { mouvements, depenses, fixes, totalFixes, totalDepenses, totalRentrees,
+        versementsPonctuels, retraitsEpargne, solde: reste } = bilanPeriode(debut, fin);
+
+      // Navigation entre les périodes
+      // Les dates ne s'affichent que pour une période passée (pour savoir laquelle on regarde)
+      $("nom-periode").textContent = enCours
+        ? ""
+        : "Paie du " + formatJourCourt(debut) + " → " + formatJourCourt(dernierJour);
+      $("periode-suivante").disabled = enCours;
+      $("bouton-recap").hidden = enCours; // le récap, c'est pour les périodes terminées
+
+      // Le gros chiffre et le détail
+      $("etiquette-reste").textContent = enCours ? "Il te reste" : "Il t'est resté";
+      $("reste").textContent = formatEuro.format(reste);
+      $("reste").classList.toggle("negatif", reste < 0);
+      $("reste").closest(".entete").classList.toggle("negatif", reste < 0); // la carte passe en rose-orangé
+      $("total-revenu").textContent = formatEuro.format(reglages.revenu);
+      $("total-rentrees").textContent = formatEuro.format(totalRentrees);
+      $("bloc-rentrees").hidden = totalRentrees === 0;
+      $("total-fixes").textContent = formatEuro.format(totalFixes);
+      $("total-depenses").textContent = formatEuro.format(totalDepenses);
+      // Épargne ponctuelle nette (versements − retraits), affichée seulement s'il y en a
+      const epargnePonctuelle = versementsPonctuels - retraitsEpargne;
+      $("total-epargne-ponctuelle").textContent = formatEuro.format(epargnePonctuelle);
+      $("bloc-epargne-ponctuelle").hidden = versementsPonctuels === 0 && retraitsEpargne === 0;
+
+      // Date du salaire : seulement pour la période en cours.
+      // 86 400 000 = nombre de millisecondes dans une journée.
+      $("info-salaire").hidden = !enCours;
+      if (enCours) {
+        const joursRestants = Math.round((fin - jour) / 86400000); // aujourd'hui compris
+        $("info-salaire").textContent = cleJour(debut) === cleJour(jour)
+          ? "Salaire versé aujourd'hui · prochain le " + formatJourLong(fin)
+          : "Prochain salaire le " + formatJourLong(fin) + " · dans " + joursRestants + " j";
+      }
+
+      // Frais fixes de la période (crédits compris), déjà rangés dans l'ordre des prélèvements
+      $("liste-fixes").replaceChildren();
+      for (const fixe of fixes) {
+        const preleve = fixe.date <= reference;
+        $("liste-fixes").append(creerLigne({
+          icone: fixe.credit ? "Crédit" : fixe.epargne ? "Épargne" : "Fixe",
+          nom: fixe.nom,
+          sousTexte: (preleve
+            ? "✓ Prélevé le " + formatJourCourt(fixe.date)
+            : "Le " + formatJourCourt(fixe.date) + " · à venir")
+            + (fixe.credit ? " · crédit" : fixe.epargne ? " · épargne" : ""),
+          sousTexteFait: preleve,
+          montant: "−" + formatEuro.format(fixe.montant),
+        }));
+      }
+      $("vide-fixes").hidden = fixes.length > 0;
+
+      // Dépenses et rentrées. Toucher une ligne = la modifier.
+      $("titre-mouvements").textContent = enCours
+        ? "Depuis la paie du " + formatJourCourt(debut)
+        : "Dépenses et rentrées";
+      $("liste-mouvements").replaceChildren();
+      for (const mouvement of mouvements) {
+        const positif = effetSurBudget(mouvement) > 0; // l'argent arrive dans le budget
+        const genre = estRentree(mouvement) ? "Rentrée"
+          : estEpargne(mouvement) ? (mouvement.retrait ? "Retrait d'épargne" : "Versement épargne")
+          : mouvement.categorie;
+        $("liste-mouvements").append(creerLigne({
+          icone: estRentree(mouvement) ? "Rentrée" : estEpargne(mouvement) ? "Épargne" : mouvement.categorie,
+          nom: mouvement.nom,
+          sousTexte: genre + " · " + formatJourCourt(new Date(mouvement.date)),
+          montant: (positif ? "+" : "−") + formatEuro.format(mouvement.montant),
+          montantPositif: positif,
+          auClic: () => ouvrirSaisie(mouvement),
+          auClicSupprimer: () => supprimerMouvement(mouvement.id),
+        }));
+      }
+      $("vide-mouvements").hidden = mouvements.length > 0;
+
+      afficherCategories(depenses, reglages.plafonds);
+      afficherGraphique(reglages.revenu, fixes, debut, fin, mouvements, reference);
+    }
+
+    // ---------- 4h. Les totaux par catégorie (barres horizontales) ----------
+    function afficherCategories(depenses, plafonds) {
+      const lignes = CATEGORIES
+        .map(categorie => ({
+          categorie,
+          total: somme(depenses.filter(d => d.categorie === categorie)),
+          plafond: plafonds[categorie] || 0,
+        }))
+        .filter(ligne => ligne.total > 0) // on ne montre que les catégories utilisées
+        .sort((a, b) => b.total - a.total);
+
+      const conteneur = $("categories");
+      conteneur.replaceChildren();
+      conteneur.hidden = lignes.length === 0;
+      $("vide-categories").hidden = lignes.length > 0;
+      if (lignes.length === 0) return;
+
+      // Une seule échelle pour toutes les barres : la plus grande valeur (dépense ou plafond) = 100 %
+      const maximum = Math.max(...lignes.map(l => Math.max(l.total, l.plafond)));
+      const pourcent = (valeur) => (valeur / maximum) * 100 + "%";
+
+      for (const { categorie, total, plafond } of lignes) {
+        const ligne = document.createElement("div");
+        ligne.className = "ligne-categorie";
+
+        const entete = document.createElement("div");
+        entete.className = "entete-categorie";
+        const nom = document.createElement("span");
+        nom.textContent = emoji(categorie) + " " + categorie;
+        const montant = document.createElement("span");
+        montant.className = "montant";
+        montant.textContent = formatEuro.format(total) + (plafond ? " / " + formatEuroRond.format(plafond) : "");
+        entete.append(nom, montant);
+
+        const piste = document.createElement("div");
+        piste.className = "piste";
+        const barre = document.createElement("div");
+        barre.className = "barre" + (plafond && total > plafond ? " depasse" : "");
+        barre.style.width = pourcent(total);
+        piste.append(barre);
+        if (plafond) {
+          const repere = document.createElement("div");
+          repere.className = "repere-plafond";
+          repere.style.left = pourcent(plafond);
+          piste.append(repere);
+        }
+        ligne.append(entete, piste);
+
+        // Un texte d'état quand on approche ou dépasse le plafond (jamais la couleur seule)
+        if (plafond && total >= plafond * 0.8) {
+          const statut = document.createElement("div");
+          if (total > plafond) {
+            statut.className = "statut depasse";
+            statut.textContent = "⚠ Plafond dépassé de " + formatEuro.format(total - plafond);
+          } else {
+            statut.className = "statut attention";
+            statut.textContent = "⚠ " + Math.round((total / plafond) * 100) + " % du plafond";
+          }
+          ligne.append(statut);
+        }
+        conteneur.append(ligne);
+      }
+    }
+
+    // ---------- 4i. Le graphique d'évolution du Reste (dessiné en SVG) ----------
+    // SVG = un format d'image fait de formes (lignes, cercles, textes) qu'on crée comme du HTML.
+
+    // Crée un élément SVG. Il faut createElementNS (et pas createElement) pour le SVG.
+    function elementSvg(nom, attributs) {
+      const element = document.createElementNS("http://www.w3.org/2000/svg", nom);
+      for (const [cle, valeur] of Object.entries(attributs)) element.setAttribute(cle, valeur);
+      return element;
+    }
+
+    // Choisit un écart "joli" entre les graduations : 1, 2, 5, 10, 20, 50, 100, 200, 500...
+    function pasArrondi(ecartBrut) {
+      const puissance = 10 ** Math.floor(Math.log10(ecartBrut));
+      for (const multiple of [1, 2, 5, 10]) {
+        if (multiple * puissance >= ecartBrut) return multiple * puissance;
+      }
+    }
+
+    // On garde ici ce qu'il faut pour la bulle (elle a besoin des points et de leur position)
+    let etatGraphique = null;
+
+    function afficherGraphique(revenu, fixes, debut, fin, mouvements, reference) {
+      const svg = $("graphique");
+      const largeur = svg.clientWidth || 320; // 0 si l'onglet est caché : on redessinera en revenant
+      const hauteur = 190;
+      const marge = { haut: 14, droite: 14, bas: 26, gauche: 58 };
+      svg.setAttribute("viewBox", `0 0 ${largeur} ${hauteur}`);
+      svg.replaceChildren();
+      $("bulle").hidden = true;
+
+      // 1. Calculer le Reste à la fin de chaque jour de la période.
+      //    Il part du salaire, baisse à chaque frais fixe et dépense, monte à chaque rentrée.
+      const nbJours = Math.round((fin - debut) / 86400000);
+      const points = [];
+      let reste = revenu;
+      for (let i = 0; i < nbJours; i++) {
+        const date = new Date(debut.getFullYear(), debut.getMonth(), debut.getDate() + i);
+        const lendemain = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+        const dernierJour = i === nbJours - 1;
+
+        // Les frais fixes prélevés ce jour-là. Un prélèvement qui tomberait après la fin
+        // de la période (paie avancée de décembre) est rangé sur le dernier jour.
+        const fixesDuJour = fixes.filter(f =>
+          (f.date >= date && f.date < lendemain) || (dernierJour && f.date >= lendemain));
+        const duJour = dansLaPeriode(mouvements, date, lendemain);
+        const depenseDuJour = somme(duJour.filter(estDepense));
+        const rentreeDuJour = somme(duJour.filter(estRentree));
+        // Épargne du jour : négatif pour un versement, positif pour un retrait
+        const epargneDuJour = duJour.filter(estEpargne).reduce((total, m) => total + effetSurBudget(m), 0);
+
+        reste += rentreeDuJour - somme(fixesDuJour) - depenseDuJour + epargneDuJour;
+        // prevu = ce jour est dans le futur (seuls les frais fixes y sont connus)
+        points.push({ date, reste, fixesDuJour, depenseDuJour, rentreeDuJour, epargneDuJour, prevu: date > reference });
+      }
+
+      // 2. Les échelles : transformer un jour en position x, un montant en position y
+      const valeurs = points.map(p => p.reste).concat(revenu, 0); // 0 toujours visible : c'est honnête
+      let yMin = Math.min(...valeurs);
+      let yMax = Math.max(...valeurs);
+      if (yMax === yMin) yMax = yMin + 100;
+      const pas = pasArrondi((yMax - yMin) / 5); // environ 5 graduations
+      yMin = Math.floor(yMin / pas) * pas;
+      yMax = Math.ceil(yMax / pas) * pas;
+
+      const largeurUtile = largeur - marge.gauche - marge.droite;
+      const hauteurUtile = hauteur - marge.haut - marge.bas;
+      const x = (i) => marge.gauche + (nbJours > 1 ? (i * largeurUtile) / (nbJours - 1) : 0);
+      const y = (v) => marge.haut + ((yMax - v) * hauteurUtile) / (yMax - yMin);
+
+      // 3. Les lignes horizontales de repère et leurs montants à gauche
+      for (let v = yMin; v <= yMax + pas / 2; v += pas) {
+        svg.append(elementSvg("line", {
+          x1: marge.gauche, x2: largeur - marge.droite, y1: y(v), y2: y(v),
+          stroke: v === 0 ? "var(--bordure)" : "var(--grille)", // la ligne du zéro un peu plus visible
+          "stroke-width": 1,
+        }));
+        const texte = elementSvg("text", { x: marge.gauche - 8, y: y(v) + 4, "text-anchor": "end" });
+        texte.textContent = formatEuroRond.format(v);
+        svg.append(texte);
+      }
+
+      // 4. Les dates en bas : jour de paie, veille de la prochaine paie, et aujourd'hui
+      const etiquetteDate = (i, texteAffiche, ancre) => {
+        const texte = elementSvg("text", { x: x(i), y: hauteur - 6, "text-anchor": ancre });
+        texte.textContent = texteAffiche;
+        svg.append(texte);
+      };
+      etiquetteDate(0, formatJourCourt(debut), "start");
+      etiquetteDate(nbJours - 1, formatJourCourt(veille(fin)), "end");
+      const iAujourdhui = points.filter(p => !p.prevu).length - 1; // numéro du jour de référence
+      // "auj." seulement s'il ne chevauche pas les dates des bords
+      if (x(iAujourdhui) - x(0) > 60 && x(nbJours - 1) - x(iAujourdhui) > 60) {
+        etiquetteDate(iAujourdhui, "auj.", "middle");
+      }
+
+      // 5. La courbe : "M" = poser le crayon, "L" = tracer un trait jusqu'au point suivant.
+      //    tracer(a, b) dessine la courbe du jour n°a au jour n°b.
+      const tracer = (a, b) => points.slice(a, b + 1)
+        .map((p, k) => (k === 0 ? "M" : "L") + x(a + k) + " " + y(p.reste))
+        .join(" ");
+      const styleCourbe = {
+        fill: "none", stroke: "var(--accent)", "stroke-width": 2,
+        "stroke-linejoin": "round", "stroke-linecap": "round",
+      };
+      // Le passé (jusqu'à aujourd'hui) : trait plein
+      svg.append(elementSvg("path", { d: tracer(0, iAujourdhui), ...styleCourbe }));
+      // L'avenir (frais fixes à venir) : pointillés plus discrets
+      if (iAujourdhui < nbJours - 1) {
+        svg.append(elementSvg("path", {
+          d: tracer(iAujourdhui, nbJours - 1), ...styleCourbe, "stroke-dasharray": "4 5", opacity: 0.6,
+        }));
+      }
+
+      // 6. Un point sur aujourd'hui, avec un anneau couleur du fond pour le détacher
+      const pointDuJour = points[iAujourdhui];
+      svg.append(elementSvg("circle", {
+        cx: x(iAujourdhui), cy: y(pointDuJour.reste), r: 5,
+        fill: "var(--accent)", stroke: "var(--carte)", "stroke-width": 2,
+      }));
+
+      // 7. Les éléments de survol (cachés tant qu'on ne touche pas le graphique)
+      const repere = elementSvg("line", {
+        y1: marge.haut, y2: hauteur - marge.bas, stroke: "var(--doux)", "stroke-width": 1, visibility: "hidden",
+      });
+      const pointSurvol = elementSvg("circle", {
+        r: 5, fill: "var(--accent)", stroke: "var(--carte)", "stroke-width": 2, visibility: "hidden",
+      });
+      svg.append(repere, pointSurvol);
+
+      svg.setAttribute("aria-label",
+        "Reste jour par jour depuis le " + formatJourCourt(debut) + " : " + formatEuro.format(pointDuJour.reste));
+
+      etatGraphique = { points, x, y, largeur, marge, nbJours, repere, pointSurvol };
+    }
+
+    // Quand le doigt (ou la souris) bouge sur le graphique : on montre le jour le plus proche
+    function survolerGraphique(evenement) {
+      if (!etatGraphique) return;
+      const { points, x, y, largeur, marge, nbJours, repere, pointSurvol } = etatGraphique;
+      const cadre = $("graphique").getBoundingClientRect();
+      const positionX = evenement.clientX - cadre.left; // position du doigt dans le graphique
+
+      // Quel jour est le plus proche de cette position ?
+      const largeurJour = nbJours > 1 ? (largeur - marge.gauche - marge.droite) / (nbJours - 1) : 1;
+      let i = Math.round((positionX - marge.gauche) / largeurJour);
+      i = Math.max(0, Math.min(points.length - 1, i)); // rester dans la période
+      const point = points[i];
+
+      for (const [attribut, valeur] of [["x1", x(i)], ["x2", x(i)]]) repere.setAttribute(attribut, valeur);
+      pointSurvol.setAttribute("cx", x(i));
+      pointSurvol.setAttribute("cy", y(point.reste));
+      repere.setAttribute("visibility", "visible");
+      pointSurvol.setAttribute("visibility", "visible");
+
+      const bulle = $("bulle");
+      bulle.replaceChildren();
+      // Une ligne de texte dans la bulle
+      const ajouterLigne = (balise, texte) => {
+        const element = document.createElement(balise);
+        element.textContent = texte;
+        bulle.append(element);
+      };
+      ajouterLigne("strong", formatEuro.format(point.reste) + (point.prevu ? " (prévu)" : ""));
+      ajouterLigne("span", formatJourCourt(point.date));
+      for (const fixe of point.fixesDuJour) {
+        ajouterLigne("span", fixe.nom + " −" + formatEuro.format(fixe.montant));
+      }
+      if (point.depenseDuJour > 0) ajouterLigne("span", "Dépenses −" + formatEuro.format(point.depenseDuJour));
+      if (point.rentreeDuJour > 0) ajouterLigne("span", "Rentrées +" + formatEuro.format(point.rentreeDuJour));
+      if (point.epargneDuJour !== 0) {
+        ajouterLigne("span", "Épargne " + (point.epargneDuJour > 0 ? "+" : "−") + formatEuro.format(Math.abs(point.epargneDuJour)));
+      }
+
+      // Le graphique est dans un cadre avec 8px de marge intérieure : on en tient compte.
+      // On empêche aussi la bulle de dépasser des bords.
+      const gauche = Math.max(70, Math.min(largeur - 70, x(i))) + 8;
+      bulle.style.left = gauche + "px";
+      bulle.style.top = 12 + y(point.reste) + "px";
+      bulle.hidden = false;
+    }
+
+    function cacherSurvol() {
+      if (!etatGraphique) return;
+      etatGraphique.repere.setAttribute("visibility", "hidden");
+      etatGraphique.pointSurvol.setAttribute("visibility", "hidden");
+      $("bulle").hidden = true;
+    }
+
+    // ---------- 4i bis. Afficher l'onglet Investissements ----------
+    function afficherInvestissements() {
+      const { credits, epargnes } = lireReglages();
+      const jour = aujourdhui();
+      const rien = credits.length === 0 && epargnes.length === 0;
+
+      $("resume-investissements").hidden = rien;
+      $("vide-credits").hidden = !rien;
+      $("titre-epargne").hidden = epargnes.length === 0;
+      $("titre-credits").hidden = credits.length === 0;
+      $("credits-mensualites").hidden = credits.length === 0;
+
+      // Épargne
+      $("liste-epargnes").replaceChildren();
+      let totalEpargne = 0;
+      for (const compte of epargnes) {
+        totalEpargne += soldeEstime(compte, jour).solde;
+        $("liste-epargnes").append(carteEpargne(compte, jour));
+      }
+      $("total-epargne").textContent = formatEuro.format(totalEpargne);
+
+      // Crédits
+      $("liste-credits").replaceChildren();
+      let totalRestant = 0;
+      let totalMensualites = 0;
+      for (const credit of credits) {
+        const situation = situationCredit(credit, jour);
+        totalRestant += situation.restantDu;
+        if (situation.aVenir.length > 0) totalMensualites += situation.mensualite;
+        $("liste-credits").append(carteCredit(credit, situation, jour));
+      }
+      $("credits-total").textContent = formatEuro.format(totalRestant);
+      $("credits-mensualites").textContent = "Mensualités : " + formatEuro.format(totalMensualites) + " par mois";
+    }
+
+    // Les cartes dont le détail est ouvert (par identifiant). Les cartes sont recréées
+    // à chaque changement : sans cette mémoire, elles se refermeraient toutes seules.
+    const cartesOuvertes = new Set();
+
+    // Crée la partie repliable "Voir le détail" d'une carte. On remplit ensuite "contenu".
+    function blocDetail(id) {
+      const details = creer("details", "plus");
+      const resume = creer("summary");
+      resume.append(creer("span", "voir", "Voir le détail"), creer("span", "masquer", "Masquer le détail"));
+      details.append(resume);
+      details.open = cartesOuvertes.has(id);
+      // "toggle" se déclenche quand on ouvre ou ferme : on s'en souvient
+      details.addEventListener("toggle", () => {
+        if (details.open) cartesOuvertes.add(id);
+        else cartesOuvertes.delete(id);
+      });
+      const contenu = creer("div");
+      details.append(contenu);
+      return { details, contenu };
+    }
+
+    // Le haut d'une carte : pastille + nom + petite ligne d'infos
+    function titreCarte(icone, nom, sousTitre) {
+      const titre = creer("div", "titre-carte");
+      const textes = creer("div");
+      textes.append(creer("h3", "", nom), creer("div", "sous-titre", sousTitre));
+      titre.append(pastille(icone), textes);
+      return titre;
+    }
+
+    // Fabrique la carte d'un compte d'épargne
+    function carteEpargne(compte, jour) {
+      const { solde, versements, operations } = soldeEstime(compte, jour);
+      const carte = creer("article", "credit"); // même présentation que les crédits
+      // "+ 3 versements auto + 1 opération" : d'où vient la différence avec le solde saisi
+      const ajouts = [];
+      if (versements) ajouts.push(versements + (versements > 1 ? " versements auto" : " versement auto"));
+      if (operations) ajouts.push(operations + (operations > 1 ? " opérations" : " opération"));
+
+      const details = [];
+      if (compte.taux) details.push("Taux " + formatTaux(compte.taux));
+      if (compte.versement) {
+        details.push(formatEuro.format(compte.versement) + " le " + compte.jourVersement + " du mois");
+        if (compte.dansBudget !== false) details.push("compté dans le budget");
+      }
+      carte.append(
+        titreCarte("Épargne", compte.nom, details.join(" · ") || "Pas de versement automatique"),
+        creer("div", "etiquette", ajouts.length ? "Solde estimé" : "Solde"),
+        creer("div", "gros-montant", formatEuro.format(solde)),
+        creer("div", "aide", "Solde de " + formatEuro.format(compte.solde) + " au "
+          + formatDateComplete(dateDepuisCle(compte.dateSolde))
+          + ajouts.map(texte => " + " + texte).join("")),
+      );
+
+      // Remplissage par rapport au plafond du livret
+      if (compte.plafond) {
+        const pourcentage = Math.min(100, (solde / compte.plafond) * 100);
+        const progression = creer("div", "progression");
+        const barre = creer("div");
+        barre.style.width = pourcentage + "%";
+        progression.append(barre);
+        carte.append(progression);
+        if (solde >= compte.plafond) {
+          carte.append(creer("div", "statut attention",
+            "⚠ Plafond de " + formatEuroRond.format(compte.plafond) + " atteint : la banque refusera les versements suivants"));
+        } else {
+          carte.append(creer("div", "aide", Math.floor(pourcentage) + " % du plafond de " + formatEuroRond.format(compte.plafond)));
+        }
+      }
+
+      // Bouton pour recaler le solde sur celui de la banque (toujours visible : on s'en sert souvent)
+      const bouton = creer("button", "lien-recap", "Mettre à jour le solde");
+      bouton.addEventListener("click", () => {
+        montrerOnglet("reglages");
+        modifierEpargne(compte, true);
+      });
+      carte.append(bouton);
+
+      // ----- Partie repliée : les chiffres clés -----
+      const chiffres = creer("div", "chiffres");
+      const ajouterChiffre = (etiquette, valeur) => {
+        const bloc = creer("div", "chiffre");
+        bloc.append(creer("div", "etiquette", etiquette), creer("strong", "", valeur));
+        chiffres.append(bloc);
+      };
+      if (compte.taux) ajouterChiffre("Intérêts sur un an (estimés)", formatEuro.format(arrondi((solde * compte.taux) / 100)));
+      if (compte.versement) ajouterChiffre("Versé par an", formatEuro.format(compte.versement * 12));
+      if (chiffres.children.length) { // pas de détail à montrer s'il n'y a aucun chiffre
+        const { details, contenu } = blocDetail(compte.id);
+        contenu.append(chiffres);
+        carte.append(details);
+      }
+      return carte;
+    }
+
+    // Fabrique la carte d'un crédit
+    function carteCredit(credit, situation, jour) {
+      const carte = creer("article", "credit");
+      const termine = situation.aVenir.length === 0;
+      const assurance = credit.assurance || 0;
+
+      carte.append(
+        titreCarte("Crédit", credit.nom, "Taux " + formatTaux(credit.taux) + " · " + dureeLisible(credit.duree) + " · "
+          + (termine ? "remboursé" : "fin en " + formatMoisAnnee(situation.fin))
+          + (credit.dansBudget !== false ? " · compté dans le budget" : "")),
+        creer("div", "etiquette", "Restant dû"),
+        creer("div", "gros-montant", formatEuro.format(situation.restantDu)),
+      );
+
+      // Barre de progression du remboursement
+      const pourcentage = (situation.rembourse / credit.capital) * 100;
+      const progression = creer("div", "progression");
+      const barre = creer("div");
+      barre.style.width = pourcentage + "%";
+      progression.append(barre);
+      carte.append(progression, creer("div", "aide",
+        Math.floor(pourcentage) + " % remboursé · " + formatEuroRond.format(situation.rembourse)
+        + " sur " + formatEuroRond.format(credit.capital)));
+
+      // Une échéance affichée sous forme de ligne
+      const ligneEcheance = (ligne) => creerLigne({
+        nom: formatDateComplete(ligne.date),
+        sousTexte: "Capital " + formatEuro.format(ligne.capital) + " · Intérêts " + formatEuro.format(ligne.interets)
+          + (assurance ? " · Assurance " + formatEuro.format(assurance) : ""),
+        montant: formatEuro.format(ligne.total),
+      });
+
+      // La prochaine échéance, toujours visible
+      if (!termine) {
+        const liste = creer("ul", "liste");
+        liste.append(ligneEcheance(situation.aVenir[0]));
+        carte.append(creer("h4", "", "Prochaine échéance"), liste);
+      }
+
+      // ----- Tout le reste est replié dans "Voir le détail" -----
+      const { details: detail, contenu } = blocDetail(credit.id);
+      carte.append(detail);
+
+      // Les chiffres clés, en grille de 2 colonnes
+      const chiffres = creer("div", "chiffres");
+      const ajouterChiffre = (etiquette, valeur) => {
+        const bloc = creer("div", "chiffre");
+        bloc.append(creer("div", "etiquette", etiquette), creer("strong", "", valeur));
+        chiffres.append(bloc);
+      };
+      ajouterChiffre(assurance ? "Mensualité (avec assurance)" : "Mensualité", formatEuro.format(situation.mensualite));
+      ajouterChiffre("Échéances restantes", String(situation.aVenir.length));
+      ajouterChiffre("Intérêts restants", formatEuro.format(situation.interetsRestants));
+      ajouterChiffre(assurance ? "Coût total (intérêts + assurance)" : "Coût total des intérêts",
+        formatEuro.format(situation.coutTotal));
+      contenu.append(chiffres);
+
+      // Les 5 échéances d'après
+      const suivantes = situation.aVenir.slice(1, 6);
+      if (suivantes.length) {
+        const liste = creer("ul", "liste");
+        for (const ligne of suivantes) liste.append(ligneEcheance(ligne));
+        contenu.append(creer("h4", "", "Échéances suivantes"), liste);
+      }
+
+      // Le tableau complet, replié par défaut (<details> s'ouvre et se ferme tout seul, sans JavaScript)
+      const details = creer("details");
+      details.append(creer("summary", "", "Tableau d'amortissement complet"));
+      const cadre = creer("div", "tableau-cadre");
+      const table = creer("table");
+      const entete = creer("tr");
+      for (const titre of ["N°", "Date", "Échéance", "Capital", "Intérêts", "Restant dû"]) entete.append(creer("th", "", titre));
+      table.append(entete);
+      for (const ligne of situation.tableau) {
+        const tr = creer("tr", ligne.date <= jour ? "passee" : ""); // échéances déjà payées en gris
+        for (const valeur of [
+          String(ligne.numero), formatJourCourt(ligne.date) + " " + ligne.date.getFullYear(),
+          formatEuro.format(ligne.total), formatEuro.format(ligne.capital),
+          formatEuro.format(ligne.interets), formatEuro.format(ligne.restantDu),
+        ]) tr.append(creer("td", "", valeur));
+        table.append(tr);
+      }
+      cadre.append(table);
+      details.append(cadre);
+      contenu.append(details);
+
+      return carte;
+    }
+
+    // ---------- 4j. Afficher l'onglet Réglages ----------
+    function afficherReglages() {
+      const reglages = lireReglages();
+
+      // On ne réécrit pas un champ pendant que l'utilisateur est en train de taper dedans
+      if (document.activeElement !== champSalaire) {
+        champSalaire.value = reglages.revenu ? montantPourChamp(reglages.revenu) : "";
+      }
+
+      const { fin } = periodeEnCours(aujourdhui());
+      $("aide-salaire").textContent =
+        "Date de versement calculée automatiquement (calendrier de paie des agents de l'État). " +
+        "Prochain versement : " + formatJourLong(fin) + ". Ton budget va d'une paie à la suivante.";
+
+      // Frais fixes. Toucher une ligne = la modifier dans le formulaire en dessous.
+      $("liste-fixes-reglages").replaceChildren();
+      const fixesTries = reglages.fraisFixes.slice().sort((a, b) => a.jour - b.jour);
+      for (const fixe of fixesTries) {
+        $("liste-fixes-reglages").append(creerLigne({
+          icone: "Fixe",
+          nom: fixe.nom,
+          sousTexte: "Prélevé le " + fixe.jour + " de chaque mois",
+          montant: formatEuro.format(fixe.montant),
+          auClic: () => modifierFraisFixe(fixe),
+          auClicSupprimer: () => supprimerFraisFixe(fixe.id),
+        }));
+      }
+      $("vide-fixes-reglages").hidden = fixesTries.length > 0;
+
+      // Épargne. Toucher une ligne = la modifier dans le formulaire en dessous.
+      $("liste-epargnes-reglages").replaceChildren();
+      for (const compte of reglages.epargnes) {
+        $("liste-epargnes-reglages").append(creerLigne({
+          icone: "Épargne",
+          nom: compte.nom,
+          sousTexte: compte.versement
+            ? formatEuro.format(compte.versement) + " le " + compte.jourVersement + " du mois"
+              + (compte.dansBudget !== false ? " · dans le budget" : "")
+            : "Pas de versement automatique",
+          montant: formatEuro.format(soldeEstime(compte, aujourdhui()).solde),
+          auClic: () => modifierEpargne(compte),
+          auClicSupprimer: () => supprimerEpargne(compte.id),
+        }));
+      }
+      $("vide-epargnes-reglages").hidden = reglages.epargnes.length > 0;
+
+      // Crédits. Toucher une ligne = la modifier dans le formulaire en dessous.
+      $("liste-credits-reglages").replaceChildren();
+      for (const credit of reglages.credits) {
+        $("liste-credits-reglages").append(creerLigne({
+          icone: "Crédit",
+          nom: credit.nom,
+          sousTexte: formatEuroRond.format(credit.capital) + " à " + formatTaux(credit.taux) + " sur " + dureeLisible(credit.duree)
+            + (credit.dansBudget !== false ? " · dans le budget" : ""),
+          montant: formatEuro.format(mensualiteCredit(credit) + (credit.assurance || 0)) + "/mois",
+          auClic: () => modifierCredit(credit),
+          auClicSupprimer: () => supprimerCredit(credit.id),
+        }));
+      }
+      $("vide-credits-reglages").hidden = reglages.credits.length > 0;
+
+      // Plafonds
+      for (const champ of document.querySelectorAll("#plafonds input")) {
+        if (document.activeElement === champ) continue;
+        const plafond = reglages.plafonds[champ.dataset.categorie];
+        champ.value = plafond ? montantPourChamp(plafond) : "";
+      }
+
+      // Date de la dernière sauvegarde
+      const derniere = lire("budget.derniereSauvegarde", null);
+      $("info-sauvegarde").textContent = derniere
+        ? "Dernière sauvegarde : " + formatJourLong(new Date(derniere)) + ". Pense à en refaire une de temps en temps."
+        : "Tes données ne sont enregistrées que sur cet appareil. Exporte-les de temps en temps " +
+          "pour ne rien perdre (par ex. dans l'app Fichiers ou iCloud Drive).";
+    }
+
+    function afficherTout() {
+      afficherBudget();
+      afficherInvestissements();
+      afficherReglages();
+    }
+
+    // ---------- 4k. Modifier les données ----------
+    // id = null → nouvelle ligne ; sinon on remplace la ligne qui a cet id
+    function enregistrerMouvement(id, donnees) {
+      const mouvements = lireMouvements();
+      if (id) {
+        const index = mouvements.findIndex(m => m.id === id);
+        mouvements[index] = { ...mouvements[index], ...donnees };
+      } else {
+        mouvements.push({ id: identifiantUnique(), ...donnees });
+      }
+      ecrire("budget.depenses", mouvements);
+    }
+
+    function supprimerMouvement(id) {
+      if (!confirm("Supprimer cette ligne ?")) return;
+      ecrire("budget.depenses", lireMouvements().filter(m => m.id !== id));
+      afficherTout();
+    }
+
+    function modifierReglages(changement) {
+      // changement est une fonction qui reçoit les réglages et les modifie
+      const reglages = lireReglages();
+      changement(reglages);
+      ecrire("budget.reglages", reglages);
+      afficherTout();
+    }
+
+    function supprimerFraisFixe(id) {
+      if (!confirm("Supprimer ce frais fixe ?")) return;
+      modifierReglages(r => { r.fraisFixes = r.fraisFixes.filter(f => f.id !== id); });
+      if (fixeEnCours && fixeEnCours.id === id) annulerModificationFixe();
+    }
+
+    // Après une dépense, prévenir si sa catégorie approche ou dépasse son plafond
+    function verifierPlafond(categorie, date) {
+      const plafond = lireReglages().plafonds[categorie];
+      if (!plafond) return;
+      const { debut, fin } = periodeDecalee(decalagePour(date));
+      const total = somme(dansLaPeriode(lireMouvements(), debut, fin)
+        .filter(m => estDepense(m) && m.categorie === categorie));
+      const resume = " (" + formatEuro.format(total) + " sur " + formatEuroRond.format(plafond) + ")";
+      if (total > plafond) {
+        afficherMessage("⚠ " + categorie + " : plafond dépassé" + resume);
+      } else if (total >= plafond * 0.8) {
+        afficherMessage("⚠ " + categorie + " : " + Math.round((total / plafond) * 100) + " % du plafond" + resume);
+      }
+    }
+
+    // ---------- 4l. Les onglets et la navigation entre périodes ----------
+    function montrerOnglet(nom) {
+      for (const vue of ["budget", "credits", "reglages"]) {
+        $("vue-" + vue).hidden = nom !== vue; // on montre la bonne vue, on cache les autres
+      }
+      boutonAjouter.hidden = nom !== "budget"; // le bouton + ne sert que sur l'onglet Budget
+      for (const bouton of document.querySelectorAll(".onglets button")) {
+        bouton.classList.toggle("actif", bouton.dataset.onglet === nom);
+      }
+      window.scrollTo(0, 0);
+      // Le graphique ne peut pas mesurer sa largeur quand il est caché : on le redessine en revenant
+      if (nom === "budget") afficherBudget();
+    }
+
+    for (const bouton of document.querySelectorAll(".onglets button")) {
+      // dataset.onglet lit l'attribut data-onglet="..." écrit dans le HTML
+      bouton.addEventListener("click", () => montrerOnglet(bouton.dataset.onglet));
+    }
+
+    $("periode-precedente").addEventListener("click", () => {
+      decalagePeriode--;
+      afficherBudget();
+    });
+    $("periode-suivante").addEventListener("click", () => {
+      if (decalagePeriode < 0) decalagePeriode++;
+      afficherBudget();
+    });
+
+    // Graphique : "pointer" = souris, doigt ou stylet, un seul code pour les trois
+    $("graphique").addEventListener("pointerdown", survolerGraphique);
+    $("graphique").addEventListener("pointermove", survolerGraphique);
+    $("graphique").addEventListener("pointerleave", (e) => {
+      if (e.pointerType === "mouse") cacherSurvol(); // au doigt, la bulle reste jusqu'au prochain toucher
+    });
+    document.addEventListener("pointerdown", (e) => {
+      if (!$("graphique").contains(e.target)) cacherSurvol(); // toucher ailleurs ferme la bulle
+    });
+
+    // Si la largeur de l'écran change (rotation de l'iPhone...), on redessine.
+    // On ignore les changements de hauteur : Safari en fait à chaque défilement (barre d'adresse).
+    let largeurEcran = window.innerWidth;
+    window.addEventListener("resize", () => {
+      if (window.innerWidth === largeurEcran) return;
+      largeurEcran = window.innerWidth;
+      afficherBudget();
+    });
+
+    // ---------- 4m. La fenêtre de saisie (ajouter ou modifier) ----------
+    function signalerErreur(champ, message) {
+      champ.setCustomValidity(message);
+      champ.reportValidity();
+    }
+
+    // Un message d'erreur posé avec setCustomValidity s'efface dès qu'on retape dans le champ
+    for (const champ of [champMontant, champSalaire, $("fixe-montant")]) {
+      champ.addEventListener("input", () => champ.setCustomValidity(""));
+    }
+
+    // Adapte la fenêtre selon "Dépense", "Rentrée" ou "Épargne"
+    function majTypeSaisie() {
+      const sens = formulaire.elements.sens.value;
+      $("bloc-categorie").hidden = sens !== "depense"; // seules les dépenses ont une catégorie
+      $("bloc-epargne").hidden = sens !== "epargne";
+      champNom.required = sens !== "epargne";          // en épargne, le nom est facultatif
+      // Un objet utilisé comme un petit dictionnaire : on y cherche le texte qui correspond à "sens"
+      champNom.placeholder = {
+        depense: "Ex : Boulangerie",
+        rentree: "Ex : Remboursement mutuelle",
+        epargne: "Facultatif",
+      }[sens];
+      if (!mouvementEnCours) {
+        $("titre-saisie").textContent = { depense: "Nouvelle dépense", rentree: "Nouvelle rentrée", epargne: "Épargne" }[sens];
+      }
+    }
+
+    for (const radio of formulaire.elements.sens) radio.addEventListener("change", majTypeSaisie);
+
+    // mouvement = null pour une nouvelle ligne, ou la ligne à modifier
+    function ouvrirSaisie(mouvement = null) {
+      mouvementEnCours = mouvement;
+      formulaire.reset();
+      champDate.max = cleJour(aujourdhui()); // pas de date dans le futur
+
+      // La liste des comptes d'épargne. Sans compte, le choix "Épargne" est caché.
+      const { epargnes } = lireReglages();
+      $("champ-compte").replaceChildren(...epargnes.map(compte => {
+        const option = creer("option", "", compte.nom);
+        option.value = compte.id;
+        return option;
+      }));
+      $("segment-epargne").hidden = epargnes.length === 0;
+
+      if (mouvement) {
+        formulaire.elements.sens.value = estRentree(mouvement) ? "rentree" : estEpargne(mouvement) ? "epargne" : "depense";
+        champMontant.value = montantPourChamp(mouvement.montant);
+        champNom.value = mouvement.nom;
+        if (estDepense(mouvement)) champCategorie.value = mouvement.categorie;
+        if (estEpargne(mouvement)) {
+          $("champ-compte").value = mouvement.compteId;
+          formulaire.elements.operation.value = mouvement.retrait ? "retrait" : "versement";
+          $("segment-epargne").hidden = false;
+        }
+        champDate.value = cleJour(new Date(mouvement.date));
+        $("titre-saisie").textContent = "Modifier";
+        $("bouton-valider").textContent = "Enregistrer";
+      } else {
+        champDate.value = cleJour(aujourdhui());
+        $("bouton-valider").textContent = "Ajouter";
+      }
+      majTypeSaisie();
+      fenetre.showModal();
+      if (!mouvement) champMontant.focus();
+    }
+
+    boutonAjouter.addEventListener("click", () => ouvrirSaisie());
+    $("bouton-annuler").addEventListener("click", () => fenetre.close());
+
+    formulaire.addEventListener("submit", (evenement) => {
+      evenement.preventDefault(); // empêche le formulaire de recharger la page
+      const montant = lireMontant(champMontant.value);
+      if (montant === null) return signalerErreur(champMontant, "Entre un montant valable, par exemple 12,50");
+
+      const sens = formulaire.elements.sens.value;
+      const jourChoisi = champDate.value; // ex. "2026-11-14"
+
+      // Quelle date enregistrer ?
+      let date;
+      if (mouvementEnCours && cleJour(new Date(mouvementEnCours.date)) === jourChoisi) {
+        date = mouvementEnCours.date;           // date inchangée : on garde l'heure d'origine
+      } else if (jourChoisi === cleJour(aujourdhui())) {
+        date = new Date().toISOString();        // aujourd'hui : l'heure actuelle
+      } else {
+        const [annee, mois, jour] = jourChoisi.split("-").map(Number);
+        date = new Date(annee, mois - 1, jour, 12).toISOString(); // un autre jour : à midi
+      }
+
+      let donnees;
+      if (sens === "epargne") {
+        const compte = lireReglages().epargnes.find(e => e.id === $("champ-compte").value);
+        if (!compte) return signalerErreur($("champ-compte"), "Choisis un compte d'épargne");
+        const retrait = formulaire.elements.operation.value === "retrait";
+        donnees = {
+          sens, montant, date, categorie: "Épargne", compteId: compte.id, retrait,
+          // Sans nom tapé, on en fabrique un : "Versement Livret A"
+          nom: champNom.value.trim() || (retrait ? "Retrait " : "Versement ") + compte.nom,
+        };
+      } else {
+        donnees = {
+          sens, montant, date, nom: champNom.value.trim(),
+          categorie: sens === "rentree" ? "Rentrée" : champCategorie.value,
+          compteId: null, retrait: false, // au cas où la ligne était une épargne avant modification
+        };
+      }
+      enregistrerMouvement(mouvementEnCours && mouvementEnCours.id, donnees);
+      fenetre.close();
+
+      // On affiche la période où se trouve la ligne (utile si on a choisi une date ancienne)
+      decalagePeriode = decalagePour(new Date(date));
+      afficherTout();
+      if (sens === "depense") verifierPlafond(donnees.categorie, new Date(date));
+      if (sens === "epargne") annoncerSoldeEpargne(donnees.compteId);
+    });
+
+    // Après un versement ou un retrait : le nouveau solde du livret (et une alerte si plafond dépassé)
+    function annoncerSoldeEpargne(compteId) {
+      const compte = lireReglages().epargnes.find(e => e.id === compteId);
+      if (!compte) return;
+      const { solde } = soldeEstime(compte, aujourdhui());
+      if (compte.plafond && solde > compte.plafond) {
+        afficherMessage("⚠ " + compte.nom + " : " + formatEuro.format(solde) + ", au-dessus du plafond de "
+          + formatEuroRond.format(compte.plafond) + ". La banque refusera ce versement.");
+      } else {
+        afficherMessage(compte.nom + " : nouveau solde estimé " + formatEuro.format(solde));
+      }
+    }
+
+    // ---------- 4n. Les formulaires des réglages ----------
+    // Salaire : enregistré quand on quitte le champ ("change"), pas à chaque touche
+    champSalaire.addEventListener("change", () => {
+      const texte = champSalaire.value.trim();
+      const revenu = texte === "" ? 0 : lireMontant(texte);
+      if (revenu === null) return signalerErreur(champSalaire, "Entre un montant valable, par exemple 2150,40");
+      modifierReglages(r => { r.revenu = revenu; });
+    });
+
+    // Frais fixes : le même formulaire sert à ajouter et à modifier
+    function modifierFraisFixe(fixe) {
+      fixeEnCours = fixe;
+      $("fixe-nom").value = fixe.nom;
+      $("fixe-montant").value = montantPourChamp(fixe.montant);
+      $("fixe-jour").value = fixe.jour;
+      $("titre-form-fixe").textContent = "Modifier « " + fixe.nom + " »";
+      $("fixe-valider").textContent = "Enregistrer";
+      $("fixe-annuler").hidden = false;
+      formFixe.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function annulerModificationFixe() {
+      fixeEnCours = null;
+      formFixe.reset();
+      $("titre-form-fixe").textContent = "Ajouter un frais fixe";
+      $("fixe-valider").textContent = "Ajouter";
+      $("fixe-annuler").hidden = true;
+    }
+
+    $("fixe-annuler").addEventListener("click", annulerModificationFixe);
+
+    formFixe.addEventListener("submit", (evenement) => {
+      evenement.preventDefault();
+      const champMontantFixe = $("fixe-montant");
+      const montant = lireMontant(champMontantFixe.value);
+      if (montant === null) return signalerErreur(champMontantFixe, "Entre un montant valable, par exemple 650");
+
+      const donnees = { nom: $("fixe-nom").value.trim(), montant, jour: Number($("fixe-jour").value) };
+      const idModifie = fixeEnCours && fixeEnCours.id;
+      modifierReglages(r => {
+        if (idModifie) {
+          r.fraisFixes = r.fraisFixes.map(f => (f.id === idModifie ? { ...f, ...donnees } : f));
+        } else {
+          r.fraisFixes.push({ id: identifiantUnique(), ...donnees });
+        }
+      });
+      annulerModificationFixe(); // remet le formulaire en mode "Ajouter"
+    });
+
+    // Épargne : même principe, un formulaire pour ajouter et modifier
+    const formEpargne = $("form-epargne");
+    let epargneEnCours = null;
+
+    // La date du solde vaut "aujourd'hui" par défaut (y compris après un reset du formulaire)
+    $("epargne-date").defaultValue = cleJour(aujourdhui());
+    $("epargne-date").value = cleJour(aujourdhui());
+    $("epargne-date").max = cleJour(aujourdhui());
+
+    // majSolde = true : on vient du bouton "Mettre à jour le solde"
+    function modifierEpargne(compte, majSolde = false) {
+      epargneEnCours = compte;
+      const jour = aujourdhui();
+      $("epargne-nom").value = compte.nom;
+      $("epargne-solde").value = montantPourChamp(majSolde ? soldeEstime(compte, jour).solde : compte.solde);
+      $("epargne-date").value = majSolde ? cleJour(jour) : compte.dateSolde;
+      $("epargne-taux").value = compte.taux ? montantPourChamp(compte.taux) : "";
+      $("epargne-plafond").value = compte.plafond ? montantPourChamp(compte.plafond) : "";
+      $("epargne-versement").value = compte.versement ? montantPourChamp(compte.versement) : "";
+      $("epargne-jour").value = compte.jourVersement || "";
+      $("epargne-budget").checked = compte.dansBudget !== false;
+      $("titre-form-epargne").textContent = majSolde
+        ? "Solde de « " + compte.nom + " » aujourd'hui"
+        : "Modifier « " + compte.nom + " »";
+      $("epargne-valider").textContent = "Enregistrer";
+      $("epargne-annuler").hidden = false;
+      formEpargne.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (majSolde) $("epargne-solde").select(); // texte sélectionné : on tape directement le nouveau solde
+    }
+
+    function annulerModificationEpargne() {
+      epargneEnCours = null;
+      formEpargne.reset();
+      $("titre-form-epargne").textContent = "Ajouter un compte d'épargne";
+      $("epargne-valider").textContent = "Ajouter";
+      $("epargne-annuler").hidden = true;
+    }
+
+    function supprimerEpargne(id) {
+      if (!confirm("Supprimer ce compte d'épargne ?")) return;
+      modifierReglages(r => { r.epargnes = r.epargnes.filter(e => e.id !== id); });
+      if (epargneEnCours && epargneEnCours.id === id) annulerModificationEpargne();
+    }
+
+    $("epargne-annuler").addEventListener("click", annulerModificationEpargne);
+
+    for (const id of ["epargne-solde", "epargne-taux", "epargne-plafond", "epargne-versement", "epargne-jour"]) {
+      $(id).addEventListener("input", () => $(id).setCustomValidity(""));
+    }
+
+    // Lit un champ facultatif : vide → 0, sinon la fonction de lecture donnée
+    function champFacultatif(id, lecture) {
+      const texte = $(id).value.trim();
+      return texte === "" ? 0 : lecture(texte);
+    }
+
+    formEpargne.addEventListener("submit", (evenement) => {
+      evenement.preventDefault();
+      const solde = lireMontantOuZero($("epargne-solde").value);
+      if (solde === null) return signalerErreur($("epargne-solde"), "Entre un montant valable, par exemple 1500");
+      const taux = champFacultatif("epargne-taux", lireTaux);
+      if (taux === null) return signalerErreur($("epargne-taux"), "Entre un taux entre 0 et 30, ou laisse vide");
+      const plafond = champFacultatif("epargne-plafond", lireMontant);
+      if (plafond === null) return signalerErreur($("epargne-plafond"), "Entre un montant valable, ou laisse vide");
+      const versement = champFacultatif("epargne-versement", lireMontant);
+      if (versement === null) return signalerErreur($("epargne-versement"), "Entre un montant valable, ou laisse vide");
+      const jourVersement = Number($("epargne-jour").value);
+      if (versement && !(jourVersement >= 1 && jourVersement <= 31)) {
+        return signalerErreur($("epargne-jour"), "Indique le jour du versement (1 à 31)");
+      }
+
+      // À quel moment précis ce solde était-il vrai ? (pour ne pas recompter les opérations déjà dedans)
+      const dateSolde = $("epargne-date").value;
+      let soldeAu;
+      if (epargneEnCours && epargneEnCours.solde === solde && epargneEnCours.dateSolde === dateSolde) {
+        soldeAu = epargneEnCours.soldeAu;                         // solde inchangé : on garde le moment d'origine
+      } else if (dateSolde === cleJour(aujourdhui())) {
+        soldeAu = new Date().toISOString();                       // solde d'aujourd'hui : maintenant
+      } else {
+        const date = dateDepuisCle(dateSolde);                    // un autre jour : la fin de cette journée
+        soldeAu = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59).toISOString();
+      }
+
+      const donnees = {
+        nom: $("epargne-nom").value.trim(),
+        solde,
+        dateSolde,
+        soldeAu,
+        taux,
+        plafond,
+        versement,
+        jourVersement: versement ? jourVersement : null,
+        dansBudget: $("epargne-budget").checked,
+      };
+      const idModifie = epargneEnCours && epargneEnCours.id;
+      modifierReglages(r => {
+        r.epargnes = idModifie
+          ? r.epargnes.map(e => (e.id === idModifie ? { ...e, ...donnees } : e))
+          : [...r.epargnes, { id: identifiantUnique(), ...donnees }];
+      });
+      annulerModificationEpargne();
+      afficherMessage("Épargne enregistrée · à voir dans l'onglet Investissements");
+    });
+
+    // Crédits : même principe que les frais fixes, un formulaire pour ajouter et modifier
+    const formCredit = $("form-credit");
+
+    function modifierCredit(credit) {
+      creditEnCours = credit;
+      $("credit-nom").value = credit.nom;
+      $("credit-capital").value = montantPourChamp(credit.capital);
+      $("credit-taux").value = montantPourChamp(credit.taux);
+      $("credit-duree").value = credit.duree;
+      $("credit-debut").value = credit.premiereEcheance;
+      $("credit-assurance").value = credit.assurance ? montantPourChamp(credit.assurance) : "";
+      $("credit-budget").checked = credit.dansBudget !== false;
+      $("titre-form-credit").textContent = "Modifier « " + credit.nom + " »";
+      $("credit-valider").textContent = "Enregistrer";
+      $("credit-annuler").hidden = false;
+      formCredit.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function annulerModificationCredit() {
+      creditEnCours = null;
+      formCredit.reset();
+      $("titre-form-credit").textContent = "Ajouter un crédit";
+      $("credit-valider").textContent = "Ajouter";
+      $("credit-annuler").hidden = true;
+    }
+
+    function supprimerCredit(id) {
+      if (!confirm("Supprimer ce crédit ?")) return;
+      modifierReglages(r => { r.credits = r.credits.filter(c => c.id !== id); });
+      if (creditEnCours && creditEnCours.id === id) annulerModificationCredit();
+    }
+
+    $("credit-annuler").addEventListener("click", annulerModificationCredit);
+
+    for (const id of ["credit-capital", "credit-taux", "credit-assurance"]) {
+      $(id).addEventListener("input", () => $(id).setCustomValidity(""));
+    }
+
+    formCredit.addEventListener("submit", (evenement) => {
+      evenement.preventDefault();
+      const capital = lireMontant($("credit-capital").value);
+      if (capital === null) return signalerErreur($("credit-capital"), "Entre un montant valable, par exemple 200000");
+      const taux = lireTaux($("credit-taux").value);
+      if (taux === null) return signalerErreur($("credit-taux"), "Entre un taux entre 0 et 30, par exemple 3,45");
+      const texteAssurance = $("credit-assurance").value.trim();
+      const assurance = texteAssurance === "" ? 0 : lireMontant(texteAssurance);
+      if (assurance === null) return signalerErreur($("credit-assurance"), "Entre un montant valable, ou laisse vide");
+
+      const donnees = {
+        nom: $("credit-nom").value.trim(),
+        capital,
+        taux,
+        duree: Number($("credit-duree").value),
+        premiereEcheance: $("credit-debut").value, // déjà au format "2021-03-05"
+        assurance,
+        dansBudget: $("credit-budget").checked,    // true si la case est cochée
+      };
+      const idModifie = creditEnCours && creditEnCours.id;
+      modifierReglages(r => {
+        r.credits = [...r.credits]; // "..." copie la liste
+        if (idModifie) {
+          r.credits = r.credits.map(c => (c.id === idModifie ? { ...c, ...donnees } : c));
+        } else {
+          r.credits.push({ id: identifiantUnique(), ...donnees });
+        }
+      });
+      annulerModificationCredit();
+
+      // Petit garde-fou : un frais fixe du même montant existe peut-être déjà pour ce crédit
+      const mensualite = mensualiteCredit(donnees) + assurance;
+      const doublon = lireReglages().fraisFixes.find(f => Math.abs(f.montant - mensualite) < 1);
+      if (donnees.dansBudget && doublon) {
+        afficherMessage("⚠ Le frais fixe « " + doublon.nom + " » a le même montant : supprime-le pour ne pas compter ce crédit deux fois");
+      } else {
+        afficherMessage("Crédit enregistré · à voir dans l'onglet Investissements");
+      }
+    });
+
+    // Plafonds : un champ par catégorie, créé ici plutôt qu'écrit 7 fois dans le HTML
+    for (const categorie of CATEGORIES) {
+      const label = document.createElement("label");
+      label.textContent = emoji(categorie) + " " + categorie;
+      const champ = document.createElement("input");
+      champ.inputMode = "decimal";
+      champ.autocomplete = "off";
+      champ.placeholder = "Aucun";
+      champ.dataset.categorie = categorie;
+      champ.addEventListener("input", () => champ.setCustomValidity(""));
+      champ.addEventListener("change", () => {
+        const texte = champ.value.trim();
+        const plafond = texte === "" ? null : lireMontant(texte);
+        if (texte !== "" && plafond === null) return signalerErreur(champ, "Entre un montant valable, par exemple 150");
+        modifierReglages(r => {
+          r.plafonds = { ...r.plafonds };
+          if (plafond) r.plafonds[categorie] = plafond;
+          else delete r.plafonds[categorie]; // champ vidé = plus de plafond
+        });
+      });
+      label.append(champ);
+      $("plafonds").append(label);
+    }
+
+    // ---------- 4o. Sauvegarde : exporter et importer un fichier ----------
+    async function exporter() {
+      const donnees = {
+        app: "budget",
+        version: 1,
+        exporteLe: new Date().toISOString(),
+        reglages: lireReglages(),
+        depenses: lireMouvements(),
+      };
+      const nomFichier = "budget-" + cleJour(aujourdhui()) + ".json";
+      // JSON.stringify(..., null, 2) = texte bien indenté, lisible par un humain
+      const fichier = new File([JSON.stringify(donnees, null, 2)], nomFichier, { type: "application/json" });
+
+      // Sur iPhone : la feuille de partage (Enregistrer dans Fichiers, AirDrop, mail...)
+      const ecranTactile = matchMedia("(pointer: coarse)").matches;
+      if (ecranTactile && navigator.canShare && navigator.canShare({ files: [fichier] })) {
+        try {
+          await navigator.share({ files: [fichier], title: "Sauvegarde budget" });
+        } catch (erreur) {
+          if (erreur.name === "AbortError") return; // l'utilisateur a fermé la feuille de partage
+          throw erreur;
+        }
+      } else {
+        // Sur ordinateur : un téléchargement classique
+        const lien = document.createElement("a");
+        lien.href = URL.createObjectURL(fichier);
+        lien.download = nomFichier;
+        lien.click();
+        setTimeout(() => URL.revokeObjectURL(lien.href), 1000);
+      }
+      ecrire("budget.derniereSauvegarde", new Date().toISOString());
+      afficherReglages();
+    }
+
+    $("bouton-exporter").addEventListener("click", () => {
+      exporter().catch(() => afficherMessage("L'export n'a pas fonctionné"));
+    });
+
+    $("champ-import").addEventListener("change", async () => {
+      const champ = $("champ-import");
+      const fichier = champ.files[0];
+      champ.value = ""; // pour pouvoir réimporter le même fichier plus tard
+      if (!fichier) return;
+
+      let donnees;
+      try {
+        donnees = JSON.parse(await fichier.text()); // "await" = attendre que le fichier soit lu
+      } catch {
+        return afficherMessage("Ce fichier n'est pas lisible");
+      }
+      // On vérifie que c'est bien une sauvegarde de cette app avant d'écraser quoi que ce soit
+      const valide = donnees && donnees.app === "budget" && Array.isArray(donnees.depenses)
+        && donnees.reglages && Array.isArray(donnees.reglages.fraisFixes);
+      if (!valide) return afficherMessage("Ce fichier n'est pas une sauvegarde de Budget");
+
+      const dateFichier = formatJourLong(new Date(donnees.exporteLe));
+      if (!confirm("Remplacer toutes les données actuelles par la sauvegarde du " + dateFichier + " ?")) return;
+
+      ecrire("budget.reglages", donnees.reglages);
+      ecrire("budget.depenses", donnees.depenses);
+      decalagePeriode = 0;
+      afficherTout();
+      afficherMessage("Sauvegarde du " + dateFichier + " importée");
+    });
+
+    // ---------- 4p. Fonctionner hors connexion (service worker) ----------
+    // Le service worker (fichier sw.js) garde une copie de l'app pour l'ouvrir sans réseau.
+    // Il ne marche qu'en https ou sur 127.0.0.1 / localhost.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+
+    // ---------- 4p bis. La fenêtre de récap d'une période terminée ----------
+    const fenetreRecap = $("fenetre-recap");
+
+    function ouvrirRecap(decalage) {
+      const { debut, fin } = periodeDecalee(decalage);
+      const bilan = bilanPeriode(debut, fin);
+
+      $("recap-periode").textContent = "Paie du " + formatJourCourt(debut) + " → " + formatJourCourt(veille(fin));
+
+      // Le solde, avec son signe et sa couleur
+      const solde = bilan.solde;
+      $("recap-solde").textContent = (solde > 0 ? "+" : "") + formatEuro.format(solde);
+      $("recap-solde").className = "recap-solde" + (solde > 0 ? " positif" : solde < 0 ? " negatif" : "");
+
+      // Une phrase pour dire ce que ça veut dire
+      // Mis de côté = ce qui reste + ce qui est parti sur l'épargne (moins ce qu'on y a repris)
+      const epargne = bilan.totalEpargne - bilan.retraitsEpargne;
+      const misDeCote = solde + epargne;
+      const part = bilan.recettes > 0 ? Math.round((misDeCote / bilan.recettes) * 100) : 0;
+      if (solde < 0) {
+        $("recap-phrase").textContent = "Tu as dépensé " + formatEuro.format(-solde) + " de plus que tes recettes"
+          + (epargne > 0 ? ", en comptant les " + formatEuro.format(epargne) + " versés sur ton épargne." : ".");
+      } else if (misDeCote > 0) {
+        $("recap-phrase").textContent = "Tu as mis de côté " + formatEuro.format(misDeCote)
+          + (epargne > 0 ? " (dont " + formatEuro.format(epargne) + " versés sur ton épargne)" : "")
+          + (part > 0 ? ", soit " + part + " % de tes recettes." : ".");
+      } else {
+        $("recap-phrase").textContent = "Pile à l'équilibre.";
+      }
+
+      // Les deux colonnes : total en gros, détail en dessous
+      $("recap-recettes").textContent = formatEuro.format(bilan.recettes);
+      $("recap-depenses").textContent = formatEuro.format(bilan.sorties);
+      const lignesRecettes = [["Salaire", bilan.salaire], ["Rentrées", bilan.totalRentrees]];
+      if (bilan.retraitsEpargne > 0) lignesRecettes.push(["Retraits d'épargne", bilan.retraitsEpargne]);
+      remplirDetail($("recap-detail-recettes"), lignesRecettes);
+
+      // Les versements automatiques sont rangés dans les frais fixes : on les en sort pour les montrer à part
+      const epargneDansLesFixes = bilan.totalEpargne - bilan.versementsPonctuels;
+      const lignesDepenses = [["Frais fixes", bilan.totalFixes - epargneDansLesFixes]];
+      if (bilan.totalEpargne > 0) lignesDepenses.push(["Épargne", bilan.totalEpargne]);
+      lignesDepenses.push(["Autres", bilan.totalDepenses]);
+      remplirDetail($("recap-detail-depenses"), lignesDepenses);
+
+      fenetreRecap.showModal();
+    }
+
+    // lignes = [["Salaire", 2150], ["Rentrées", 48.2]] → une ligne <li> par élément
+    function remplirDetail(liste, lignes) {
+      liste.replaceChildren();
+      for (const [nom, montant] of lignes) {
+        const li = document.createElement("li");
+        const elNom = document.createElement("span");
+        elNom.textContent = nom;
+        const elMontant = document.createElement("span");
+        elMontant.textContent = formatEuro.format(montant);
+        li.append(elNom, elMontant);
+        liste.append(li);
+      }
+    }
+
+    // À l'ouverture de l'app : si une nouvelle paie est arrivée depuis la dernière fois,
+    // on montre une fois le récap de la période qui vient de se terminer.
+    function proposerRecap() {
+      const precedente = periodeDecalee(-1);
+      const cle = cleJour(precedente.debut); // ex. "2026-10-28" identifie la période
+      if (lire("budget.dernierRecap", null) === cle) return; // déjà montré
+      ecrire("budget.dernierRecap", cle);
+      // Pas de récap si rien n'a été saisi sur cette période (ex. le tout premier lancement)
+      if (dansLaPeriode(lireMouvements(), precedente.debut, precedente.fin).length === 0) return;
+      ouvrirRecap(-1);
+    }
+
+    $("bouton-recap").addEventListener("click", () => ouvrirRecap(decalagePeriode));
+    $("recap-fermer").addEventListener("click", () => fenetreRecap.close());
+
+    // ---------- 4q. Premier affichage au chargement de la page ----------
+    afficherTout();
+    proposerRecap();
+  </script>
+</body>
+</html>
